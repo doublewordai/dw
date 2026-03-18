@@ -107,6 +107,7 @@ pub async fn list(
         print_list(&response.data, format);
         if response.has_more
             && let Some(last_id) = &response.last_id
+            && format != OutputFormat::Json
         {
             eprintln!(
                 "More files available. Next page: dw files list --after {}",
