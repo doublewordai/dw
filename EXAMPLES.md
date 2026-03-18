@@ -21,8 +21,11 @@ JSONL
 ### Check what models are available
 
 ```bash
+# Requires full login (browser flow) — see README for details
 dw models list
 ```
+
+If you're using API key auth, you can check available models on the [dashboard](https://app.doubleword.ai) or in the [docs](https://docs.doubleword.ai).
 
 ### Submit to multiple models
 

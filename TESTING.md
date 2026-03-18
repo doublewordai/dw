@@ -49,7 +49,9 @@ dw account current
 dw account list
 ```
 
-## 3. Models
+## 3. Models (requires platform key — browser login)
+
+These commands require a platform key. With API key auth, they will error with "No platform API key configured."
 
 ```bash
 # List all available models
@@ -350,7 +352,9 @@ rm -rf synthetic-data-generation/
 ## Known Limitations (v0.1.0)
 
 - `dw login` (browser flow) requires the control-layer callback endpoint — not yet built
-- `dw whoami` requires a platform key (not available with `--api-key` login)
-- Webhooks commands require a platform key
+- With `--api-key` login (inference key only), these commands are unavailable:
+  - `dw whoami` (requires platform key)
+  - `dw models list / get` (requires platform key)
+  - `dw webhooks *` (requires platform key)
 - `dw realtime` streaming parses the full SSE body at once (not true incremental streaming yet)
 - `dw examples clone` requires network access to GitHub
