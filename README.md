@@ -119,6 +119,24 @@ dw --account personal batches list   # Override per-command
 
 When you log in within an org context, resources are billed to the org with per-member attribution.
 
+## Output Formats
+
+Every list and detail command supports three output formats:
+
+```bash
+dw models list --output table    # Human-readable table (default for TTY)
+dw models list --output json     # One JSON object per line (default for pipes)
+dw models list --output plain    # Minimal, tab-separated
+```
+
+Auto-detection: if stdout is a terminal, defaults to `table`. If piped, defaults to `json`.
+
+```bash
+# These are equivalent:
+dw batches list --output json
+dw batches list | cat
+```
+
 ## Commands
 
 ### Models
@@ -279,24 +297,6 @@ dw examples clone model-evals --dir ./my-evals   # Clone to custom directory
 ```
 
 Each example includes working code, sample data, and a README with results and costs.
-
-## Output Formats
-
-Every list and detail command supports three output formats:
-
-```bash
-dw models list --output table    # Human-readable table (default for TTY)
-dw models list --output json     # One JSON object per line (default for pipes)
-dw models list --output plain    # Minimal, tab-separated
-```
-
-Auto-detection: if stdout is a terminal, defaults to `table`. If piped, defaults to `json`.
-
-```bash
-# These are equivalent:
-dw batches list --output json
-dw batches list | cat
-```
 
 ## Global Flags
 
