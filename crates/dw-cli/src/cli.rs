@@ -273,8 +273,8 @@ pub struct FilePrepareArgs {
     pub encode_images: bool,
 
     /// Output path (default: overwrite in place).
-    #[arg(long, short = 'o')]
-    pub output: Option<PathBuf>,
+    #[arg(long = "output-file", short = 'o')]
+    pub output_file: Option<PathBuf>,
 }
 
 // --- Batches ---

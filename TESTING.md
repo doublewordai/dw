@@ -179,23 +179,23 @@ dw files validate /tmp/missing.jsonl
 
 ```bash
 # Override model on all lines
-dw files prepare /tmp/test.jsonl --model "new-model-alias" --output /tmp/transformed.jsonl
+dw files prepare /tmp/test.jsonl --model "new-model-alias" --output-file /tmp/transformed.jsonl
 cat /tmp/transformed.jsonl | head -1 | python3 -m json.tool
 
 # Override temperature and max_tokens
-dw files prepare /tmp/test.jsonl --temperature 0.5 --max-tokens 50 --output /tmp/params.jsonl
+dw files prepare /tmp/test.jsonl --temperature 0.5 --max-tokens 50 --output-file /tmp/params.jsonl
 cat /tmp/params.jsonl | head -1 | python3 -m json.tool
 
 # Set arbitrary field
-dw files prepare /tmp/test.jsonl --set body.top_p=0.9 --set body.stream=false --output /tmp/custom.jsonl
+dw files prepare /tmp/test.jsonl --set body.top_p=0.9 --set body.stream=false --output-file /tmp/custom.jsonl
 cat /tmp/custom.jsonl | head -1 | python3 -m json.tool
 
 # Add a line
-dw files prepare /tmp/test.jsonl --add-line '{"custom_id": "req-004", "method": "POST", "url": "/v1/chat/completions", "body": {"model": "test", "messages": [{"role": "user", "content": "Hello"}]}}' --output /tmp/added.jsonl
+dw files prepare /tmp/test.jsonl --add-line '{"custom_id": "req-004", "method": "POST", "url": "/v1/chat/completions", "body": {"model": "test", "messages": [{"role": "user", "content": "Hello"}]}}' --output-file /tmp/added.jsonl
 wc -l /tmp/test.jsonl /tmp/added.jsonl
 
 # Remove lines matching pattern
-dw files prepare /tmp/test.jsonl --remove-lines "req-002" --output /tmp/removed.jsonl
+dw files prepare /tmp/test.jsonl --remove-lines "req-002" --output-file /tmp/removed.jsonl
 wc -l /tmp/test.jsonl /tmp/removed.jsonl
 cat /tmp/removed.jsonl
 ```

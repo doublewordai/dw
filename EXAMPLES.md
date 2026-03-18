@@ -115,7 +115,7 @@ for model in "${MODELS[@]}"; do
     slug=$(echo "$model" | tr '/' '-' | tr '[:upper:]' '[:lower:]')
 
     # Prepare with model override, upload, check cost
-    dw files prepare eval.jsonl --model "$model" --output "/tmp/eval-${slug}.jsonl"
+    dw files prepare eval.jsonl --model "$model" --output-file "/tmp/eval-${slug}.jsonl"
     file_id=$(dw files upload "/tmp/eval-${slug}.jsonl" --output json | jq -r '.id')
     echo "$model:"
     dw files cost-estimate "$file_id"

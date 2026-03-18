@@ -151,7 +151,7 @@ Transform JSONL files locally without uploading. Useful for preparing files befo
 
 ```bash
 # Override the model
-dw files prepare batch.jsonl --model Qwen3-235B --output prepared.jsonl
+dw files prepare batch.jsonl --model Qwen3-235B --output-file prepared.jsonl
 
 # Set generation parameters
 dw files prepare batch.jsonl --temperature 0.5 --max-tokens 200 --top-p 0.9

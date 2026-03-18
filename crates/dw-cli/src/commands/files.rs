@@ -175,7 +175,7 @@ pub async fn prepare(args: &FilePrepareArgs) -> anyhow::Result<()> {
         encode_images: args.encode_images,
     };
 
-    let output_path = args.output.as_deref().unwrap_or(&args.path);
+    let output_path = args.output_file.as_deref().unwrap_or(&args.path);
     jsonl::transform_file(&args.path, output_path, &transforms).await?;
 
     eprintln!("Prepared: {}", output_path.display());
