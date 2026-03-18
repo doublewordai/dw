@@ -7,11 +7,13 @@ Designed for developers scripting batch workflows and AI agents building data pi
 ## Install
 
 ```bash
-# Download and install the binary
-curl -fsSL https://doubleword.ai/install.sh | sh
+# Clone and build
+git clone https://github.com/doublewordai/dw.git
+cd dw
+cargo build
 
-# Or build from source
-cargo install --path crates/dw-cli
+# Add to your shell session
+alias dw="$(pwd)/target/debug/dw"
 ```
 
 ## Quick Start
