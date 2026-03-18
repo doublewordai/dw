@@ -68,22 +68,29 @@ impl DwError {
     pub async fn from_response(response: reqwest::Response) -> Self {
         let status = response.status().as_u16();
 
-        // Try to parse the error body
-        let body = response
-            .json::<ApiErrorBody>()
-            .await
-            .unwrap_or(ApiErrorBody {
-                error: None,
-                message: None,
-                retry_after_seconds: None,
-            });
+        // Read raw body text first, then try to parse as JSON.
+        // The server returns JSON for some errors and plain text for others.
+        let raw_body = response.text().await.unwrap_or_default();
+
+        let body = serde_json::from_str::<ApiErrorBody>(&raw_body).unwrap_or(ApiErrorBody {
+            error: None,
+            message: None,
+            retry_after_seconds: None,
+        });
 
         let error = body
             .error
             .unwrap_or_else(|| status_to_string(status).to_string());
-        let message = body
-            .message
-            .unwrap_or_else(|| "No details provided".to_string());
+
+        // Use parsed JSON message, or fall back to raw body text
+        let message = body.message.unwrap_or_else(|| {
+            let trimmed = raw_body.trim();
+            if trimmed.is_empty() {
+                "No details provided".to_string()
+            } else {
+                trimmed.to_string()
+            }
+        });
 
         match status {
             401 => DwError::Unauthenticated,
