@@ -34,8 +34,7 @@ pub async fn list(
     type_filter: Option<&str>,
     format: OutputFormat,
 ) -> anyhow::Result<()> {
-    let response = client.list_models().await?;
-    let mut models = response.data;
+    let mut models = client.list_models().await?;
 
     if let Some(filter) = type_filter {
         models.retain(|m| {
@@ -50,7 +49,16 @@ pub async fn list(
 }
 
 pub async fn get(client: &DwClient, model_id: &str, format: OutputFormat) -> anyhow::Result<()> {
-    let model = client.get_model(model_id).await?;
+    // Try as UUID first, then fall back to alias lookup
+    let model = if uuid::Uuid::try_parse(model_id).is_ok() {
+        client.get_model(model_id).await?
+    } else {
+        client
+            .find_model_by_alias(model_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("No model found with alias '{}'", model_id))?
+    };
+
     print_item(&model, format);
     Ok(())
 }
