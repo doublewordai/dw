@@ -20,7 +20,7 @@ pub enum ApiSurface {
 pub struct DwClientConfig {
     pub ai_base_url: String,
     pub admin_base_url: String,
-    pub realtime_key: Option<String>,
+    pub inference_key: Option<String>,
     pub platform_key: Option<String>,
     pub cli_version: String,
     pub timeout: Duration,
@@ -31,7 +31,7 @@ impl Default for DwClientConfig {
         Self {
             ai_base_url: DEFAULT_AI_BASE_URL.to_string(),
             admin_base_url: DEFAULT_ADMIN_BASE_URL.to_string(),
-            realtime_key: None,
+            inference_key: None,
             platform_key: None,
             cli_version: env!("CARGO_PKG_VERSION").to_string(),
             timeout: Duration::from_secs(300),
@@ -69,10 +69,10 @@ impl DwClient {
         Ok(Self { http, config })
     }
 
-    /// Create a client configured with just a realtime key (e.g. for agent use).
-    pub fn with_realtime_key(key: String) -> Result<Self, DwError> {
+    /// Create a client configured with just an inference key (e.g. for agent use).
+    pub fn with_inference_key(key: String) -> Result<Self, DwError> {
         Self::new(DwClientConfig {
-            realtime_key: Some(key),
+            inference_key: Some(key),
             ..Default::default()
         })
     }
@@ -88,8 +88,8 @@ impl DwClient {
     /// Get the API key for a given surface, or return an error if missing.
     fn api_key(&self, surface: ApiSurface) -> Result<&str, DwError> {
         match surface {
-            ApiSurface::Ai => self.config.realtime_key.as_deref().ok_or(DwError::MissingKey {
-                key_type: "realtime".to_string(),
+            ApiSurface::Ai => self.config.inference_key.as_deref().ok_or(DwError::MissingKey {
+                key_type: "inference".to_string(),
                 hint: "Run `dw login` or `dw login --api-key <key>` to authenticate.".to_string(),
             }),
             ApiSurface::Admin => {
@@ -210,8 +210,8 @@ impl DwClient {
         self.config.platform_key.is_some()
     }
 
-    /// Check if a realtime key is configured.
-    pub fn has_realtime_key(&self) -> bool {
-        self.config.realtime_key.is_some()
+    /// Check if an inference key is configured.
+    pub fn has_inference_key(&self) -> bool {
+        self.config.inference_key.is_some()
     }
 }

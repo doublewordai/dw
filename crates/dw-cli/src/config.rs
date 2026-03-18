@@ -57,9 +57,9 @@ pub struct Account {
     pub user_id: String,
     pub email: String,
     #[serde(default)]
-    pub realtime_key: Option<String>,
+    pub inference_key: Option<String>,
     #[serde(default)]
-    pub realtime_key_id: Option<String>,
+    pub inference_key_id: Option<String>,
     #[serde(default)]
     pub platform_key: Option<String>,
     #[serde(default)]
@@ -186,7 +186,7 @@ pub fn build_client(
     dw_client::DwClient::new(dw_client::DwClientConfig {
         ai_base_url,
         admin_base_url,
-        realtime_key: account.realtime_key.clone(),
+        inference_key: account.inference_key.clone(),
         platform_key: account.platform_key.clone(),
         ..Default::default()
     })

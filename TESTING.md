@@ -76,7 +76,7 @@ cat > ~/.dw/credentials.toml << 'EOF'
 display_name = "Your Name"
 user_id = "your-user-uuid"
 email = "you@example.com"
-realtime_key = "sk-your-realtime-key"
+inference_key = "sk-dupdw1tD9qS1JL6RnSM2vREkfq71OtpjjjzOUkCHS30"
 platform_key = "sk-your-platform-key"
 EOF
 
@@ -122,12 +122,12 @@ If `dw whoami` works, both keys are configured correctly.
 
 ### Alternative: inference-only testing
 
-If you only have a realtime key, you can use `dw login --api-key` and
+If you only have an inference key, you can use `dw login --api-key` and
 skip the manual credential setup. This gives you files, batches,
-streaming, and realtime — but not models, whoami, or webhooks:
+streaming, and real-time inference — but not models, whoami, or webhooks:
 
 ```bash
-dw login --api-key "sk-your-realtime-key"
+dw login --api-key "sk-your-inference-key"
 ```
 
 ## 3. Models (requires platform key — browser login)

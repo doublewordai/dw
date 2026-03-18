@@ -23,7 +23,7 @@ async fn login_with_key(
     config: &mut Config,
 ) -> anyhow::Result<()> {
     // Try to validate the key by making a lightweight request
-    let client = dw_client::DwClient::with_realtime_key(api_key.to_string())?;
+    let client = dw_client::DwClient::with_inference_key(api_key.to_string())?;
 
     // Try listing models as a lightweight auth check
     match client.list_models().await {
@@ -41,8 +41,8 @@ async fn login_with_key(
         display_name: "API Key".to_string(),
         user_id: "unknown".to_string(),
         email: "unknown".to_string(),
-        realtime_key: Some(api_key.to_string()),
-        realtime_key_id: None,
+        inference_key: Some(api_key.to_string()),
+        inference_key_id: None,
         platform_key: None,
         platform_key_id: None,
         org_id: None,
@@ -147,8 +147,8 @@ async fn login_browser(
     }
 
     // Extract keys and user info
-    let realtime_key = params
-        .get("realtime_key")
+    let inference_key = params
+        .get("inference_key")
         .ok_or_else(|| anyhow::anyhow!("No realtime key in callback"))?;
     let platform_key = params
         .get("platform_key")
@@ -171,8 +171,8 @@ async fn login_browser(
         display_name,
         user_id,
         email,
-        realtime_key: Some(realtime_key.clone()),
-        realtime_key_id: params.get("realtime_key_id").cloned(),
+        inference_key: Some(inference_key.clone()),
+        inference_key_id: params.get("inference_key_id").cloned(),
         platform_key: Some(platform_key.clone()),
         platform_key_id: params.get("platform_key_id").cloned(),
         org_id,
@@ -287,8 +287,8 @@ async fn delete_account_keys(account: &Account, config: &Config) -> anyhow::Resu
     };
     let client = config::build_client(account, config, &no_overrides)?;
 
-    // Delete realtime key first (using platform key)
-    if let (Some(key_id), Some(_)) = (&account.realtime_key_id, &account.platform_key) {
+    // Delete inference key first (using platform key)
+    if let (Some(key_id), Some(_)) = (&account.inference_key_id, &account.platform_key) {
         client.delete_api_key(&account.user_id, key_id).await.ok();
     }
 

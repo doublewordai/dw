@@ -34,8 +34,8 @@ The `DwClient` handles routing to the correct surface automatically.
 
 ## Auth Model
 
-- **Browser login** (`dw login`): Opens browser → SSO → server creates two external API keys (realtime + platform) → redirects to CLI's localhost server with keys
-- **Headless login** (`dw login --api-key`): Stores a realtime key directly (limited functionality)
+- **Browser login** (`dw login`): Opens browser → SSO → server creates two external API keys (inference + platform) → redirects to CLI's localhost server with keys
+- **Headless login** (`dw login --api-key`): Stores an inference key directly (limited functionality)
 - **Credentials**: Stored in `~/.dw/credentials.toml` (0600 permissions)
 - **Accounts**: kubectl-style contexts. `dw account switch` changes which key pair is active.
 
