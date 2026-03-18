@@ -53,8 +53,11 @@ pub struct Credentials {
 /// A stored account (personal or org-scoped).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Account {
+    #[serde(default)]
     pub display_name: String,
+    #[serde(default)]
     pub user_id: String,
+    #[serde(default)]
     pub email: String,
     #[serde(default)]
     pub inference_key: Option<String>,
@@ -194,5 +197,11 @@ pub fn build_client(
 
 fn load_toml_file<T: serde::de::DeserializeOwned>(path: &Path) -> Option<T> {
     let contents = std::fs::read_to_string(path).ok()?;
-    toml::from_str(&contents).ok()
+    match toml::from_str(&contents) {
+        Ok(v) => Some(v),
+        Err(e) => {
+            eprintln!("Warning: could not parse {}: {}", path.display(), e);
+            None
+        }
+    }
 }
