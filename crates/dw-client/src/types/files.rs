@@ -31,20 +31,24 @@ pub struct ListFilesParams {
 /// File cost estimate response.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct FileCostEstimate {
-    pub total_cost: f64,
-    #[serde(default)]
-    pub model_breakdowns: Vec<ModelCostBreakdown>,
+    pub file_id: String,
+    pub total_requests: i64,
+    pub total_estimated_input_tokens: i64,
+    pub total_estimated_output_tokens: i64,
+    /// Cost as string to preserve decimal precision.
+    pub total_estimated_cost: String,
+    pub models: Vec<ModelCostBreakdown>,
 }
 
 /// Per-model cost breakdown within a cost estimate.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ModelCostBreakdown {
-    #[serde(default)]
-    pub model: Option<String>,
-    #[serde(default)]
-    pub request_count: Option<i64>,
-    #[serde(default)]
-    pub estimated_cost: Option<f64>,
+    pub model: String,
+    pub request_count: i64,
+    pub estimated_input_tokens: i64,
+    pub estimated_output_tokens: i64,
+    /// Cost as string to preserve decimal precision.
+    pub estimated_cost: String,
 }
 
 /// Response wrapper for file list (OpenAI-compatible cursor pagination).

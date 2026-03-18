@@ -176,18 +176,21 @@ pub async fn cost_estimate(
 
     match format {
         OutputFormat::Json => {
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&serde_json::to_value(&estimate)?)?
-            );
+            println!("{}", serde_json::to_string_pretty(&estimate)?);
         }
         _ => {
-            eprintln!("Estimated cost: ${:.4}", estimate.total_cost);
-            for breakdown in &estimate.model_breakdowns {
-                if let (Some(model), Some(cost)) = (&breakdown.model, breakdown.estimated_cost) {
-                    let count = breakdown.request_count.unwrap_or(0);
-                    eprintln!("  {} — {} requests — ${:.4}", model, count, cost);
-                }
+            println!(
+                "Estimated cost: ${} ({} requests, ~{} input tokens, ~{} output tokens)",
+                estimate.total_estimated_cost,
+                estimate.total_requests,
+                estimate.total_estimated_input_tokens,
+                estimate.total_estimated_output_tokens,
+            );
+            for breakdown in &estimate.models {
+                println!(
+                    "  {} — {} requests — ${}",
+                    breakdown.model, breakdown.request_count, breakdown.estimated_cost
+                );
             }
         }
     }
