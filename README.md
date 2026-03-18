@@ -129,6 +129,30 @@ dw models list --type chat         # Filter by type
 dw models get Qwen3-30B            # Get model details
 ```
 
+### Pagination
+
+List commands (`files list`, `batches list`) use cursor-based pagination. By default they return 20 items and show a hint if more are available.
+
+```bash
+dw files list                          # First 20 items
+dw files list -n 50                    # Custom page size (max 100)
+dw files list --after <last-id>        # Next page (use ID from hint)
+dw files list --all                    # Fetch everything (auto-paginates)
+```
+
+In table/plain mode, a hint prints to stderr when more items exist:
+```
+More files available. Next page: dw files list --after <id>
+```
+
+In JSON mode the hint is suppressed — pipe-friendly. Get the cursor from the last object:
+```bash
+last_id=$(dw files list --output json | tail -1 | jq -r '.id')
+dw files list --after "$last_id" --output json
+```
+
+The same flags (`-n`, `--after`, `--all`) work identically on `dw batches list`.
+
 ### Files
 
 Upload JSONL files for batch processing, with optional transforms applied before upload.
