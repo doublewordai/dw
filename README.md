@@ -32,47 +32,47 @@ dw realtime Qwen3-30B "What is the capital of France?"
 
 ## Authentication
 
-There are two ways to authenticate, and they give different levels of access.
+### `dw login`
 
-**Browser login** (full access):
+The primary way to authenticate. Opens your browser for SSO, then stores credentials locally. This gives you full access to every command — files, batches, models, webhooks, account management, everything.
 
 ```bash
-dw login
+dw login                  # Login to your personal account
+dw login --org acme-corp  # Login within an org context
 ```
 
-Opens your browser for SSO authentication. Creates both a **realtime key** and a **platform key**, giving you access to every command.
+```bash
+dw whoami          # Show current user, roles, credit balance
+dw logout          # Remove stored credentials
+dw logout --all    # Remove all accounts
+```
 
-**API key** (inference only — for scripting and agents):
+### API key login (agents and CI)
+
+For AI agents, CI pipelines, and headless environments that don't have a browser, you can authenticate with an inference API key from the dashboard:
 
 ```bash
 dw login --api-key "sk-your-key"
 ```
 
-Standard users can create inference (realtime) keys from the dashboard. This gives access to the core batch workflow — files, batches, streaming, and real-time inference — but not platform commands like model listing, webhooks, or account info.
+This is intentionally scoped to inference operations — the agent gets access to files, batches, streaming, and real-time inference, which is everything it needs to run workloads on your behalf. Platform operations like browsing models, managing webhooks, or viewing account info require the full `dw login` flow.
 
-### What works with each auth method
+A typical setup: you (the developer) run `dw login` to set up your account and browse models. Then you create an inference API key from the dashboard and hand it to your agent or CI pipeline with `dw login --api-key`.
 
-| Command | API key (inference) | Browser login (full) |
+### Access by auth method
+
+| Command | `dw login` | `dw login --api-key` |
 |---------|:---:|:---:|
-| `dw files *` | Yes | Yes |
-| `dw batches *` | Yes | Yes |
+| `dw files *` (upload, list, get, delete, content, cost-estimate) | Yes | Yes |
+| `dw batches *` (create, list, get, cancel, retry, results, run, watch) | Yes | Yes |
 | `dw stream` | Yes | Yes |
 | `dw realtime` | Yes | Yes |
-| `dw files validate / prepare` | Yes (local) | Yes (local) |
-| `dw examples *` | Yes (no auth needed) | Yes |
-| `dw models list / get` | - | Yes |
-| `dw whoami` | - | Yes |
-| `dw webhooks *` | - | Yes |
-| `dw account *` | Yes (local) | Yes |
-| `dw config *` | Yes (local) | Yes |
-
-If you're an agent or script that just needs to run batches, an inference API key is all you need. If you want to browse models or manage webhooks, use `dw login` for the full browser flow.
-
-```bash
-dw whoami          # Show current user and credit balance (requires platform key)
-dw logout          # Remove stored credentials
-dw logout --all    # Remove all accounts
-```
+| `dw files validate / prepare` (local, no API call) | Yes | Yes |
+| `dw examples *` (no auth needed) | Yes | Yes |
+| `dw config *` / `dw account *` (local) | Yes | Yes |
+| `dw models list / get` | Yes | — |
+| `dw whoami` | Yes | — |
+| `dw webhooks *` | Yes | — |
 
 ## Configuration
 
