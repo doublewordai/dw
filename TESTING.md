@@ -1,6 +1,7 @@
 # DW CLI — Testing Playbook
 
-Test against staging or production using an API key (no browser login needed).
+Test against staging or production before the browser login flow is built.
+We manually configure both keys and the server endpoint.
 
 ## Setup
 
@@ -30,23 +31,103 @@ dw whoami
 dw models list
 ```
 
-## 2. Login with API Key
+## 2. Configure Server and Credentials
 
-Get a realtime API key from app.doubleword.ai (Settings > API Keys).
+The browser login flow (`dw login`) isn't wired up yet, so we configure
+credentials manually. You need two API keys:
+
+- **Realtime key** — for files, batches, streaming, inference (`/ai/v1/*`)
+- **Platform key** — for models, webhooks, whoami (`/admin/api/v1/*`)
+
+Both can be created from the dashboard or directly via the API.
+
+### Point at the right server
+
+For **staging** (single domain for both APIs):
 
 ```bash
-# Login with key — should validate and store
-dw login --api-key "sk-your-key-here"
+dw config set-url https://staging.doubleword.ai
+```
 
-# Verify stored credentials
-cat ~/.dw/credentials.toml
+For **production** (default, two domains):
 
-# Check permissions (should be 600)
-ls -la ~/.dw/credentials.toml
+```bash
+# These are the defaults — only needed if you changed them previously
+dw config set-ai-url https://api.doubleword.ai
+dw config set-admin-url https://app.doubleword.ai
+```
 
-# Check active account
+Verify:
+
+```bash
+dw config show
+```
+
+### Set up credentials manually
+
+Since `dw login` creates credentials via the browser flow, we write
+them directly for testing. Replace the key values with your actual keys:
+
+```bash
+mkdir -p ~/.dw
+
+cat > ~/.dw/credentials.toml << 'EOF'
+[accounts.personal]
+display_name = "Your Name"
+user_id = "your-user-uuid"
+email = "you@example.com"
+realtime_key = "sk-your-realtime-key"
+platform_key = "sk-your-platform-key"
+EOF
+
+chmod 600 ~/.dw/credentials.toml
+
+cat > ~/.dw/config.toml << 'EOF'
+active_account = "personal"
+default_output = "table"
+EOF
+```
+
+If you're testing against staging, also add the server config:
+
+```bash
+cat > ~/.dw/config.toml << 'EOF'
+active_account = "personal"
+default_output = "table"
+
+[servers]
+ai = "https://staging.doubleword.ai"
+admin = "https://staging.doubleword.ai"
+EOF
+```
+
+### Verify
+
+```bash
+# Should show your config
+dw config show
+
+# Should show your account
 dw account current
 dw account list
+
+# Should show your user info (uses platform key)
+dw whoami
+
+# Should list models (uses platform key)
+dw models list
+```
+
+If `dw whoami` works, both keys are configured correctly.
+
+### Alternative: inference-only testing
+
+If you only have a realtime key, you can use `dw login --api-key` and
+skip the manual credential setup. This gives you files, batches,
+streaming, and realtime — but not models, whoami, or webhooks:
+
+```bash
+dw login --api-key "sk-your-realtime-key"
 ```
 
 ## 3. Models (requires platform key — browser login)
