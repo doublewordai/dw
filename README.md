@@ -4,24 +4,76 @@ A command-line tool for the [Doubleword](https://doubleword.ai) batch inference 
 
 Replaces curl commands and custom scripts with a single tool for managing files, running batches, and sending inference requests. Built for developers who interact with the API directly, scripts that automate batch workflows, and AI agents building data pipelines.
 
-## Install
+## Install & Setup
+
+> **Work in progress:** A one-line install script (`curl | sh`), Homebrew formula, pip package, and browser-based `dw login` are coming soon. For now, build from source and configure credentials manually.
+
+### Build from source
 
 ```bash
-# Clone and build
-git clone https://github.com/doublewordai/dw.git
-cd dw
+git clone https://github.com/doublewordai/dw-cli.git
+cd dw-cli
 cargo build
-
-# Add to your shell session
 alias dw="$(pwd)/target/debug/dw"
+```
+
+### Configure credentials
+
+The browser login flow (`dw login`) is not yet available. Set up credentials manually with API keys from [app.doubleword.ai](https://app.doubleword.ai):
+
+- **Inference key** — for files, batches, streaming, real-time inference (create from Settings > API Keys)
+- **Platform key** — for models, webhooks, whoami (requires platform access)
+
+```bash
+mkdir -p ~/.dw
+
+cat > ~/.dw/credentials.toml << 'EOF'
+[accounts.personal]
+display_name = "Your Name"
+user_id = "your-user-uuid"
+email = "you@example.com"
+inference_key = "sk-your-inference-key"
+platform_key = "sk-your-platform-key"
+EOF
+
+chmod 600 ~/.dw/credentials.toml
+
+cat > ~/.dw/config.toml << 'EOF'
+active_account = "personal"
+default_output = "table"
+EOF
+```
+
+If you only have an inference key, you can also use:
+
+```bash
+dw login --api-key "sk-your-inference-key"
+```
+
+This gives you files, batches, streaming, and real-time inference — but not models, webhooks, or whoami.
+
+### Verify
+
+```bash
+dw config show         # Check server URLs and active account
+dw files list          # Should return your files (inference key)
+dw models list         # Should return models (platform key)
+```
+
+### Point at a different server
+
+```bash
+# Self-hosted or staging (single domain)
+dw config set-url https://staging.doubleword.ai
+
+# Production defaults (two domains)
+dw config set-ai-url https://api.doubleword.ai
+dw config set-admin-url https://app.doubleword.ai
 ```
 
 ## Quick Start
 
 ```bash
-# Full login (browser) — gives access to everything
-dw login
-
 # Run a batch from a JSONL file and stream results to stdout
 dw stream batch.jsonl
 
@@ -32,11 +84,13 @@ dw models list
 dw realtime Qwen3-30B "What is the capital of France?"
 ```
 
-## Authentication
+## Authentication (coming soon)
+
+> The browser login flow described below is planned but not yet implemented. See [Install & Setup](#install--setup) above for the current manual approach.
 
 ### `dw login`
 
-The primary way to authenticate. Opens your browser for SSO, then stores credentials locally. This gives you full access to every command — files, batches, models, webhooks, account management, everything.
+The primary way to authenticate. Will open your browser for SSO, then store credentials locally. This gives full access to every command — files, batches, models, webhooks, account management, everything.
 
 ```bash
 dw login                  # Login to your personal account
