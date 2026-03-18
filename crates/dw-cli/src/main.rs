@@ -109,8 +109,21 @@ async fn run() -> anyhow::Result<()> {
                     FileCommands::Upload(args) => {
                         commands::files::upload(&client, &args, format).await
                     }
-                    FileCommands::List { limit, after, all } => {
-                        commands::files::list(&client, limit, after.as_deref(), all, format).await
+                    FileCommands::List {
+                        limit,
+                        after,
+                        all,
+                        purpose,
+                    } => {
+                        commands::files::list(
+                            &client,
+                            limit,
+                            after.as_deref(),
+                            all,
+                            &purpose,
+                            format,
+                        )
+                        .await
                     }
                     FileCommands::Get { id } => commands::files::get(&client, &id, format).await,
                     FileCommands::Delete { id, yes } => {

@@ -75,8 +75,16 @@ pub async fn list(
     limit: i64,
     after: Option<&str>,
     all: bool,
+    purpose: &str,
     format: OutputFormat,
 ) -> anyhow::Result<()> {
+    // "all" purpose means no filter; otherwise filter by purpose
+    let purpose_filter = if purpose == "all" {
+        None
+    } else {
+        Some(purpose.to_string())
+    };
+
     if all {
         // Auto-paginate: fetch all files
         let mut all_files = Vec::new();
@@ -85,7 +93,7 @@ pub async fn list(
             let params = dw_client::types::files::ListFilesParams {
                 limit: Some(100),
                 after: cursor,
-                ..Default::default()
+                purpose: purpose_filter.clone(),
             };
             let response = client.list_files(&params).await?;
             let has_more = response.has_more;
@@ -101,7 +109,7 @@ pub async fn list(
         let params = dw_client::types::files::ListFilesParams {
             limit: Some(limit),
             after: after.map(|s| s.to_string()),
-            ..Default::default()
+            purpose: purpose_filter,
         };
         let response = client.list_files(&params).await?;
         print_list(&response.data, format);

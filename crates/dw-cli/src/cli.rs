@@ -170,7 +170,7 @@ pub enum ModelCommands {
 pub enum FileCommands {
     /// Upload a JSONL file for batch processing.
     Upload(FileUploadArgs),
-    /// List uploaded files.
+    /// List uploaded files. Shows input files (purpose=batch) by default.
     List {
         /// Maximum number of files to return (default: 20, max: 100).
         #[arg(long, short = 'n', default_value = "20")]
@@ -181,6 +181,9 @@ pub enum FileCommands {
         /// Fetch all files (auto-paginate). Ignores --limit and --after.
         #[arg(long)]
         all: bool,
+        /// Filter by purpose: batch (default), batch_output, batch_error, or all.
+        #[arg(long, default_value = "batch")]
+        purpose: String,
     },
     /// Get file metadata.
     Get {
