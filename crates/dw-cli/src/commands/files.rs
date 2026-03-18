@@ -43,6 +43,10 @@ pub async fn upload(
     args: &FileUploadArgs,
     format: OutputFormat,
 ) -> anyhow::Result<()> {
+    if !args.path.exists() {
+        anyhow::bail!("Path does not exist: {}", args.path.display());
+    }
+
     let upload_path = if args.model.is_some()
         || args.temperature.is_some()
         || args.max_tokens.is_some()
