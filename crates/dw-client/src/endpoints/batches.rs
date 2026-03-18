@@ -7,53 +7,47 @@ use crate::types::batches::{
 impl DwClient {
     /// Create a new batch.
     ///
-    /// Corresponds to `POST /ai/v1/batches`.
+    /// Corresponds to `POST /v1/batches`.
     pub async fn create_batch(
         &self,
         request: &CreateBatchRequest,
     ) -> Result<BatchResponse, DwError> {
-        let req = self.post(ApiSurface::Ai, "/ai/v1/batches")?.json(request);
+        let req = self.post(ApiSurface::Ai, "/v1/batches")?.json(request);
         self.send(req).await
     }
 
     /// List batches.
     ///
-    /// Corresponds to `GET /ai/v1/batches`.
+    /// Corresponds to `GET /v1/batches`.
     pub async fn list_batches(
         &self,
         params: &ListBatchesParams,
     ) -> Result<BatchListResponse, DwError> {
-        let req = self.get(ApiSurface::Ai, "/ai/v1/batches")?.query(params);
+        let req = self.get(ApiSurface::Ai, "/v1/batches")?.query(params);
         self.send(req).await
     }
 
     /// Get a specific batch.
     ///
-    /// Corresponds to `GET /ai/v1/batches/{batch_id}`.
+    /// Corresponds to `GET /v1/batches/{batch_id}`.
     pub async fn get_batch(&self, batch_id: &str) -> Result<BatchResponse, DwError> {
-        let req = self.get(ApiSurface::Ai, &format!("/ai/v1/batches/{}", batch_id))?;
+        let req = self.get(ApiSurface::Ai, &format!("/v1/batches/{}", batch_id))?;
         self.send(req).await
     }
 
     /// Cancel a batch.
     ///
-    /// Corresponds to `POST /ai/v1/batches/{batch_id}/cancel`.
+    /// Corresponds to `POST /v1/batches/{batch_id}/cancel`.
     pub async fn cancel_batch(&self, batch_id: &str) -> Result<BatchResponse, DwError> {
-        let req = self.post(
-            ApiSurface::Ai,
-            &format!("/ai/v1/batches/{}/cancel", batch_id),
-        )?;
+        let req = self.post(ApiSurface::Ai, &format!("/v1/batches/{}/cancel", batch_id))?;
         self.send(req).await
     }
 
     /// Retry failed requests in a batch.
     ///
-    /// Corresponds to `POST /ai/v1/batches/{batch_id}/retry`.
+    /// Corresponds to `POST /v1/batches/{batch_id}/retry`.
     pub async fn retry_batch(&self, batch_id: &str) -> Result<BatchResponse, DwError> {
-        let req = self.post(
-            ApiSurface::Ai,
-            &format!("/ai/v1/batches/{}/retry", batch_id),
-        )?;
+        let req = self.post(ApiSurface::Ai, &format!("/v1/batches/{}/retry", batch_id))?;
         self.send(req).await
     }
 
