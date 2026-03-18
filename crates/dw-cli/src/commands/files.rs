@@ -70,13 +70,50 @@ pub async fn upload(
     Ok(())
 }
 
-pub async fn list(client: &DwClient, limit: i64, format: OutputFormat) -> anyhow::Result<()> {
-    let params = dw_client::types::files::ListFilesParams {
-        limit: Some(limit),
-        ..Default::default()
-    };
-    let response = client.list_files(&params).await?;
-    print_list(&response.data, format);
+pub async fn list(
+    client: &DwClient,
+    limit: i64,
+    after: Option<&str>,
+    all: bool,
+    format: OutputFormat,
+) -> anyhow::Result<()> {
+    if all {
+        // Auto-paginate: fetch all files
+        let mut all_files = Vec::new();
+        let mut cursor: Option<String> = None;
+        loop {
+            let params = dw_client::types::files::ListFilesParams {
+                limit: Some(100),
+                after: cursor,
+                ..Default::default()
+            };
+            let response = client.list_files(&params).await?;
+            let has_more = response.has_more;
+            let last_id = response.last_id.clone();
+            all_files.extend(response.data);
+            if !has_more {
+                break;
+            }
+            cursor = last_id;
+        }
+        print_list(&all_files, format);
+    } else {
+        let params = dw_client::types::files::ListFilesParams {
+            limit: Some(limit),
+            after: after.map(|s| s.to_string()),
+            ..Default::default()
+        };
+        let response = client.list_files(&params).await?;
+        print_list(&response.data, format);
+        if response.has_more
+            && let Some(last_id) = &response.last_id
+        {
+            eprintln!(
+                "More files available. Next page: dw files list --after {}",
+                last_id
+            );
+        }
+    }
     Ok(())
 }
 

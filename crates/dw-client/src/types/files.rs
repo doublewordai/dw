@@ -47,10 +47,14 @@ pub struct ModelCostBreakdown {
     pub estimated_cost: Option<f64>,
 }
 
-/// Response wrapper for file list (OpenAI-compatible format).
+/// Response wrapper for file list (OpenAI-compatible cursor pagination).
 #[derive(Debug, Deserialize)]
 pub struct FileListResponse {
     pub data: Vec<FileResponse>,
     #[serde(default)]
-    pub has_more: Option<bool>,
+    pub has_more: bool,
+    #[serde(default)]
+    pub first_id: Option<String>,
+    #[serde(default)]
+    pub last_id: Option<String>,
 }

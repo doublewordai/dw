@@ -172,8 +172,15 @@ pub enum FileCommands {
     Upload(FileUploadArgs),
     /// List uploaded files.
     List {
-        #[arg(long, default_value = "20")]
+        /// Maximum number of files to return (default: 20, max: 100).
+        #[arg(long, short = 'n', default_value = "20")]
         limit: i64,
+        /// Cursor: show files after this file ID (for pagination).
+        #[arg(long)]
+        after: Option<String>,
+        /// Fetch all files (auto-paginate). Ignores --limit and --after.
+        #[arg(long)]
+        all: bool,
     },
     /// Get file metadata.
     Get {
