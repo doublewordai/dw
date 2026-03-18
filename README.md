@@ -63,8 +63,8 @@ dw models list         # Should return models (platform key)
 ### Point at a different server
 
 ```bash
-# Self-hosted or staging (single domain)
-dw config set-url https://staging.doubleword.ai
+# Self-hosted deployment (single domain)
+dw config set-url https://your-server.example.com
 
 # Production defaults (two domains)
 dw config set-ai-url https://api.doubleword.ai
@@ -136,11 +136,11 @@ Config is stored in `~/.dw/config.toml`. Credentials in `~/.dw/credentials.toml`
 
 ### Server URLs
 
-By default, `dw` points to `api.doubleword.ai` (inference) and `app.doubleword.ai` (admin). Override for self-hosted or staging deployments:
+By default, `dw` points to `api.doubleword.ai` (inference) and `app.doubleword.ai` (admin). Override for self-hosted deployments:
 
 ```bash
-# Point both APIs to a single host (e.g. staging)
-dw config set-url https://staging.doubleword.ai
+# Point both APIs to a single host
+dw config set-url https://your-server.example.com
 
 # Set individually
 dw config set-ai-url https://api.mycompany.com
@@ -156,7 +156,7 @@ dw config show
 You can also override per-command without persisting:
 
 ```bash
-dw --server https://staging.doubleword.ai models list
+dw --server https://your-server.example.com models list
 dw --server-ai https://custom-api.com batches list
 ```
 
