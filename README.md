@@ -2,7 +2,7 @@
 
 A command-line tool for the [Doubleword](https://doubleword.ai) batch inference platform. Upload JSONL files, run batches, stream results, and send real-time inference requests — all from the terminal.
 
-Designed for developers scripting batch workflows and AI agents building data pipelines.
+Replaces curl commands and custom scripts with a single tool for managing files, running batches, and sending inference requests. Built for developers who interact with the API directly, scripts that automate batch workflows, and AI agents building data pipelines.
 
 ## Install
 
