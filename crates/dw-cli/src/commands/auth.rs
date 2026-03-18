@@ -199,23 +199,21 @@ async fn login_browser(
 }
 
 /// Handle `dw logout`.
+///
+/// Removes local credentials only. Does NOT delete keys server-side — keys
+/// may have been created externally (dashboard, API) and should not be
+/// destroyed by the CLI. Users can revoke keys from the dashboard if needed.
 pub async fn logout(
     args: &LogoutArgs,
     config: &mut Config,
     credentials: &mut Credentials,
 ) -> anyhow::Result<()> {
     if args.all {
-        // Attempt to delete keys server-side for each account (best effort)
-        for (name, account) in &credentials.accounts {
-            if let Err(e) = delete_account_keys(account, config).await {
-                eprintln!("Warning: could not revoke keys for '{}': {}", name, e);
-            }
-        }
         credentials.accounts.clear();
         config.active_account = None;
         config::save_credentials(credentials)?;
         config::save_config(config)?;
-        eprintln!("Logged out of all accounts.");
+        eprintln!("Logged out of all accounts. Local credentials removed.");
         return Ok(());
     }
 
@@ -226,13 +224,9 @@ pub async fn logout(
         .ok_or_else(|| anyhow::anyhow!("No active account to log out of."))?
         .to_string();
 
-    if let Some(account) = credentials.accounts.get(&account_name)
-        && let Err(e) = delete_account_keys(account, config).await
-    {
-        eprintln!("Warning: could not revoke keys: {}", e);
+    if credentials.accounts.remove(&account_name).is_none() {
+        anyhow::bail!("Account '{}' not found.", account_name);
     }
-
-    credentials.accounts.remove(&account_name);
 
     // Update active account
     if config.active_account.as_deref() == Some(&account_name) {
@@ -241,7 +235,11 @@ pub async fn logout(
 
     config::save_credentials(credentials)?;
     config::save_config(config)?;
-    eprintln!("Logged out of '{}'.", account_name);
+    eprintln!(
+        "Logged out of '{}'. Local credentials removed.",
+        account_name
+    );
+    eprintln!("API keys are still active — revoke them from the dashboard if needed.");
 
     Ok(())
 }
@@ -275,28 +273,6 @@ pub async fn whoami(client: &dw_client::DwClient) -> anyhow::Result<()> {
             println!("  - {} ({})", name, role);
         }
     }
-    Ok(())
-}
-
-/// Best-effort key deletion on logout.
-async fn delete_account_keys(account: &Account, config: &Config) -> anyhow::Result<()> {
-    let no_overrides = config::ServerOverrides {
-        both: None,
-        ai: None,
-        admin: None,
-    };
-    let client = config::build_client(account, config, &no_overrides)?;
-
-    // Delete inference key first (using platform key)
-    if let (Some(key_id), Some(_)) = (&account.inference_key_id, &account.platform_key) {
-        client.delete_api_key(&account.user_id, key_id).await.ok();
-    }
-
-    // Delete platform key (self-delete)
-    if let (Some(key_id), Some(_)) = (&account.platform_key_id, &account.platform_key) {
-        client.delete_api_key(&account.user_id, key_id).await.ok();
-    }
-
     Ok(())
 }
 
