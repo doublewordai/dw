@@ -14,11 +14,26 @@ use output::OutputFormat;
 
 #[tokio::main]
 async fn main() {
+    // Exit cleanly on broken pipe (e.g. `dw files list | head -1`)
+    reset_sigpipe();
+
     if let Err(e) = run().await {
         eprintln!("Error: {}", e);
         std::process::exit(1);
     }
 }
+
+/// Reset SIGPIPE to default behaviour so broken pipes cause a clean exit
+/// instead of a panic. Rust ignores SIGPIPE by default.
+#[cfg(unix)]
+fn reset_sigpipe() {
+    unsafe {
+        libc::signal(libc::SIGPIPE, libc::SIG_DFL);
+    }
+}
+
+#[cfg(not(unix))]
+fn reset_sigpipe() {}
 
 async fn run() -> anyhow::Result<()> {
     let cli = cli::Cli::parse();

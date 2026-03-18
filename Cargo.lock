@@ -350,6 +350,7 @@ dependencies = [
  "dw-client",
  "flate2",
  "indicatif",
+ "libc",
  "open",
  "rand",
  "reqwest",
