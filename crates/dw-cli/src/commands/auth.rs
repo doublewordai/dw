@@ -280,7 +280,12 @@ pub async fn whoami(client: &dw_client::DwClient) -> anyhow::Result<()> {
 
 /// Best-effort key deletion on logout.
 async fn delete_account_keys(account: &Account, config: &Config) -> anyhow::Result<()> {
-    let client = config::build_client(account, config, None)?;
+    let no_overrides = config::ServerOverrides {
+        both: None,
+        ai: None,
+        admin: None,
+    };
+    let client = config::build_client(account, config, &no_overrides)?;
 
     // Delete realtime key first (using platform key)
     if let (Some(key_id), Some(_)) = (&account.realtime_key_id, &account.platform_key) {

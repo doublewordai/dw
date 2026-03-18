@@ -1,6 +1,7 @@
 pub mod account;
 pub mod auth;
 pub mod batches;
+pub mod config;
 pub mod examples;
 pub mod files;
 pub mod models;

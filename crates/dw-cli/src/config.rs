@@ -148,16 +148,40 @@ pub fn resolve_account<'a>(
     Ok((key, account))
 }
 
+/// Server URL overrides from CLI flags.
+pub struct ServerOverrides<'a> {
+    /// --server: sets both AI and Admin to the same URL.
+    pub both: Option<&'a str>,
+    /// --server-ai: override just the inference API URL.
+    pub ai: Option<&'a str>,
+    /// --server-admin: override just the admin API URL.
+    pub admin: Option<&'a str>,
+}
+
 /// Build a DwClient from resolved account and config.
+///
+/// Priority for each URL: CLI flag > config.toml > default.
+/// --server sets both; --server-ai / --server-admin override individually.
 pub fn build_client(
     account: &Account,
     config: &Config,
-    server_override: Option<&str>,
+    overrides: &ServerOverrides,
 ) -> Result<dw_client::DwClient, dw_client::DwError> {
     let servers = config.servers.as_ref().cloned().unwrap_or_default();
 
-    let ai_base_url = server_override.map(|s| s.to_string()).unwrap_or(servers.ai);
-    let admin_base_url = servers.admin;
+    // --server-ai > --server > config > default
+    let ai_base_url = overrides
+        .ai
+        .or(overrides.both)
+        .map(|s| s.to_string())
+        .unwrap_or(servers.ai);
+
+    // --server-admin > --server > config > default
+    let admin_base_url = overrides
+        .admin
+        .or(overrides.both)
+        .map(|s| s.to_string())
+        .unwrap_or(servers.admin);
 
     dw_client::DwClient::new(dw_client::DwClientConfig {
         ai_base_url,

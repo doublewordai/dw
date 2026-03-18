@@ -22,9 +22,17 @@ pub struct Cli {
     #[arg(long, global = true)]
     pub account: Option<String>,
 
-    /// Override AI API server URL.
+    /// Override both server URLs (inference + admin) to point to a single host.
     #[arg(long, global = true)]
     pub server: Option<String>,
+
+    /// Override inference API server URL (default: api.doubleword.ai).
+    #[arg(long, global = true)]
+    pub server_ai: Option<String>,
+
+    /// Override admin API server URL (default: app.doubleword.ai).
+    #[arg(long, global = true)]
+    pub server_admin: Option<String>,
 }
 
 #[derive(Subcommand)]
@@ -68,6 +76,10 @@ pub enum Commands {
     #[command(subcommand)]
     Examples(ExampleCommands),
 
+    /// View and update CLI configuration.
+    #[command(subcommand)]
+    Config(ConfigCommands),
+
     /// Generate shell completions.
     Completions(CompletionsArgs),
 }
@@ -93,6 +105,31 @@ pub struct LogoutArgs {
     /// Log out of all accounts.
     #[arg(long)]
     pub all: bool,
+}
+
+// --- Config ---
+
+#[derive(Subcommand)]
+pub enum ConfigCommands {
+    /// Show current configuration.
+    Show,
+    /// Set the server URL for both inference and admin APIs.
+    SetUrl {
+        /// URL to use for both APIs (e.g. https://staging.doubleword.ai).
+        url: String,
+    },
+    /// Set the inference API server URL.
+    SetAiUrl {
+        /// Inference API URL (e.g. https://api.doubleword.ai).
+        url: String,
+    },
+    /// Set the admin API server URL.
+    SetAdminUrl {
+        /// Admin API URL (e.g. https://app.doubleword.ai).
+        url: String,
+    },
+    /// Reset server URLs to defaults.
+    ResetUrls,
 }
 
 // --- Account ---

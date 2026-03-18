@@ -6,10 +6,10 @@ mod output;
 
 use clap::Parser;
 use cli::{
-    AccountCommands, BatchCommands, Commands, ExampleCommands, FileCommands, ModelCommands,
-    WebhookCommands,
+    AccountCommands, BatchCommands, Commands, ConfigCommands, ExampleCommands, FileCommands,
+    ModelCommands, WebhookCommands,
 };
-use config::{build_client, load_config, load_credentials, resolve_account};
+use config::{ServerOverrides, build_client, load_config, load_credentials, resolve_account};
 use output::OutputFormat;
 
 #[tokio::main]
@@ -27,6 +27,12 @@ async fn run() -> anyhow::Result<()> {
     let mut credentials = load_credentials();
 
     let format = cli.output.unwrap_or_else(OutputFormat::default_for_stdout);
+
+    let server_overrides = ServerOverrides {
+        both: cli.server.as_deref(),
+        ai: cli.server_ai.as_deref(),
+        admin: cli.server_admin.as_deref(),
+    };
 
     match cli.command {
         // --- Auth commands (don't require existing credentials) ---
@@ -50,6 +56,20 @@ async fn run() -> anyhow::Result<()> {
             }
         },
 
+        // --- Config commands (local operations) ---
+        Commands::Config(subcmd) => match subcmd {
+            ConfigCommands::Show => {
+                commands::config::show(&config);
+                Ok(())
+            }
+            ConfigCommands::SetUrl { url } => commands::config::set_url(&mut config, &url),
+            ConfigCommands::SetAiUrl { url } => commands::config::set_ai_url(&mut config, &url),
+            ConfigCommands::SetAdminUrl { url } => {
+                commands::config::set_admin_url(&mut config, &url)
+            }
+            ConfigCommands::ResetUrls => commands::config::reset_urls(&mut config),
+        },
+
         // --- Account commands (local operations) ---
         Commands::Account(subcmd) => match subcmd {
             AccountCommands::List => {
@@ -71,7 +91,7 @@ async fn run() -> anyhow::Result<()> {
                 resolve_account(cli.account.as_deref(), &config, &credentials)
                     .map_err(|e| anyhow::anyhow!("{}", e))?;
             let account = account.clone();
-            let client = build_client(&account, &config, cli.server.as_deref())?;
+            let client = build_client(&account, &config, &server_overrides)?;
 
             match cmd {
                 Commands::Whoami => commands::auth::whoami(&client).await,
@@ -176,6 +196,7 @@ async fn run() -> anyhow::Result<()> {
                 Commands::Login(_)
                 | Commands::Logout(_)
                 | Commands::Account(_)
+                | Commands::Config(_)
                 | Commands::Examples(_)
                 | Commands::Completions(_) => unreachable!(),
             }
