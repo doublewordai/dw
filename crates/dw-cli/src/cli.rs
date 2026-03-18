@@ -295,8 +295,15 @@ pub enum BatchCommands {
     Create(BatchCreateArgs),
     /// List batches.
     List {
-        #[arg(long, default_value = "20")]
+        /// Maximum number of batches to return (default: 20, max: 100).
+        #[arg(long, short = 'n', default_value = "20")]
         limit: i64,
+        /// Cursor: show batches after this batch ID (for pagination).
+        #[arg(long)]
+        after: Option<String>,
+        /// Fetch all batches (auto-paginate). Ignores --limit and --after.
+        #[arg(long)]
+        all: bool,
         /// Show active batches first.
         #[arg(long)]
         active_first: bool,

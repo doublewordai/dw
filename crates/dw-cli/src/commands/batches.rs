@@ -72,16 +72,50 @@ pub async fn create(
 pub async fn list(
     client: &DwClient,
     limit: i64,
+    after: Option<&str>,
+    all: bool,
     active_first: bool,
     format: OutputFormat,
 ) -> anyhow::Result<()> {
-    let params = ListBatchesParams {
-        limit: Some(limit),
-        active_first: if active_first { Some(true) } else { None },
-        ..Default::default()
-    };
-    let response = client.list_batches(&params).await?;
-    print_list(&response.data, format);
+    let active_first_param = if active_first { Some(true) } else { None };
+
+    if all {
+        let mut all_batches = Vec::new();
+        let mut cursor: Option<String> = None;
+        loop {
+            let params = ListBatchesParams {
+                limit: Some(100),
+                after: cursor,
+                active_first: active_first_param,
+            };
+            let response = client.list_batches(&params).await?;
+            let has_more = response.has_more;
+            let last_id = response.last_id.clone();
+            all_batches.extend(response.data);
+            if !has_more {
+                break;
+            }
+            cursor = last_id;
+        }
+        print_list(&all_batches, format);
+    } else {
+        let params = ListBatchesParams {
+            limit: Some(limit),
+            after: after.map(|s| s.to_string()),
+            active_first: active_first_param,
+        };
+        let response = client.list_batches(&params).await?;
+        print_list(&response.data, format);
+        if response.has_more
+            && let Some(last_id) = &response.last_id
+            && format != OutputFormat::Json
+        {
+            eprintln!(
+                "More batches available. Next page: dw batches list --after {}",
+                last_id
+            );
+        }
+    }
     Ok(())
 }
 

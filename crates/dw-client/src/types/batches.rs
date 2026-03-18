@@ -60,12 +60,16 @@ pub struct ListBatchesParams {
     pub active_first: Option<bool>,
 }
 
-/// Batch list response.
+/// Batch list response (cursor pagination).
 #[derive(Debug, Deserialize)]
 pub struct BatchListResponse {
     pub data: Vec<BatchResponse>,
     #[serde(default)]
-    pub has_more: Option<bool>,
+    pub has_more: bool,
+    #[serde(default)]
+    pub first_id: Option<String>,
+    #[serde(default)]
+    pub last_id: Option<String>,
 }
 
 impl BatchResponse {

@@ -154,8 +154,20 @@ async fn run() -> anyhow::Result<()> {
                     }
                     BatchCommands::List {
                         limit,
+                        after,
+                        all,
                         active_first,
-                    } => commands::batches::list(&client, limit, active_first, format).await,
+                    } => {
+                        commands::batches::list(
+                            &client,
+                            limit,
+                            after.as_deref(),
+                            all,
+                            active_first,
+                            format,
+                        )
+                        .await
+                    }
                     BatchCommands::Get { id } => commands::batches::get(&client, &id, format).await,
                     BatchCommands::Cancel { id, yes } => {
                         commands::batches::cancel(&client, &id, yes).await
