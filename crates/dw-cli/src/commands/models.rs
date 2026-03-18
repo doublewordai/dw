@@ -5,15 +5,18 @@ use crate::output::{Displayable, OutputFormat, print_item, print_list};
 
 impl Displayable for ModelResponse {
     fn table_headers() -> Vec<&'static str> {
-        vec!["ID", "Alias", "Type", "Owner"]
+        vec!["Alias", "Model", "Type", "Capabilities"]
     }
 
     fn to_table_row(&self) -> Vec<String> {
         vec![
-            self.id.clone(),
-            self.alias.clone().unwrap_or_default(),
+            self.alias.clone(),
+            self.model_name.clone(),
             self.model_type.clone().unwrap_or_default(),
-            self.owned_by.clone(),
+            self.capabilities
+                .as_ref()
+                .map(|c| c.join(", "))
+                .unwrap_or_default(),
         ]
     }
 
@@ -22,7 +25,7 @@ impl Displayable for ModelResponse {
     }
 
     fn to_plain(&self) -> String {
-        self.alias.as_deref().unwrap_or(&self.id).to_string()
+        self.alias.clone()
     }
 }
 

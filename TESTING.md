@@ -73,11 +73,11 @@ mkdir -p ~/.dw
 
 cat > ~/.dw/credentials.toml << 'EOF'
 [accounts.personal]
-display_name = "Your Name"
-user_id = "your-user-uuid"
-email = "you@example.com"
-inference_key = "sk-dupdw1tD9qS1JL6RnSM2vREkfq71OtpjjjzOUkCHS30"
-platform_key = "sk-your-platform-key"
+display_name = "Hamish Main"
+user_id = "8d1be576-4391-4973-a1b9-642912358f0c"
+email = "hamish.hall@doubleword.ai"
+inference_key = "sk-c8fLuYdw4oMhpDn6rEhCe-I5MAn5_AMdDMaQXTkhbvU"
+platform_key = "sk-kMHm6b_or6Vb8WSiUeyLOloa1QAJfEF6RcdzqCYEGag"
 EOF
 
 chmod 600 ~/.dw/credentials.toml
