@@ -417,9 +417,12 @@ dw files list --account nonexistent
 ## 16. Error Handling
 
 ```bash
-# Nonexistent resource
-dw files get "file-nonexistent-id"
-dw batches get "batch-nonexistent-id"
+# Nonexistent resource (use valid UUID format to get 404, not 400)
+dw files get "00000000-0000-0000-0000-000000000000"
+dw batches get "00000000-0000-0000-0000-000000000000"
+
+# Invalid ID format (should get 400 with clear message)
+dw files get "not-a-uuid"
 
 # Invalid file path
 dw files upload /tmp/nonexistent.jsonl
