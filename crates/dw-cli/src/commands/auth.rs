@@ -22,11 +22,14 @@ async fn login_with_key(
     credentials: &mut Credentials,
     config: &mut Config,
 ) -> anyhow::Result<()> {
-    // Try to validate the key by making a lightweight request
+    // Validate the key by listing files (lightweight, uses inference API surface)
     let client = dw_client::DwClient::with_inference_key(api_key.to_string())?;
 
-    // Try listing models as a lightweight auth check
-    match client.list_models().await {
+    let params = dw_client::types::files::ListFilesParams {
+        limit: Some(1),
+        ..Default::default()
+    };
+    match client.list_files(&params).await {
         Ok(_) => {}
         Err(dw_client::DwError::Unauthenticated) => {
             anyhow::bail!("Invalid API key. Check the key and try again.");
