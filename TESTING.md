@@ -1,7 +1,6 @@
 # DW CLI — Testing Playbook
 
-Test against staging or production before the browser login flow is built.
-We manually configure both keys and the server endpoint.
+Systematic test of every command against staging or production.
 
 ## Setup
 
@@ -28,7 +27,7 @@ dw --version
 
 # Should error with helpful message (no credentials yet)
 dw whoami
-dw models list
+dw files list
 ```
 
 ## 2. Configure Server and Credentials
@@ -36,10 +35,8 @@ dw models list
 The browser login flow (`dw login`) isn't wired up yet, so we configure
 credentials manually. You need two API keys:
 
-- **Realtime key** — for files, batches, streaming, inference (`/ai/v1/*`)
+- **Inference key** — for files, batches, streaming, real-time inference (`/v1/*`)
 - **Platform key** — for models, webhooks, whoami (`/admin/api/v1/*`)
-
-Both can be created from the dashboard or directly via the API.
 
 ### Point at the right server
 
@@ -65,19 +62,18 @@ dw config show
 
 ### Set up credentials manually
 
-Since `dw login` creates credentials via the browser flow, we write
-them directly for testing. Replace the key values with your actual keys:
+Replace the key values with your actual keys:
 
 ```bash
 mkdir -p ~/.dw
 
 cat > ~/.dw/credentials.toml << 'EOF'
 [accounts.personal]
-display_name = "Hamish Main"
-user_id = "8d1be576-4391-4973-a1b9-642912358f0c"
-email = "hamish.hall@doubleword.ai"
-inference_key = "sk-c8fLuYdw4oMhpDn6rEhCe-I5MAn5_AMdDMaQXTkhbvU"
-platform_key = "sk-kMHm6b_or6Vb8WSiUeyLOloa1QAJfEF6RcdzqCYEGag"
+display_name = "Your Name"
+user_id = "your-user-uuid"
+email = "you@example.com"
+inference_key = "sk-your-inference-key"
+platform_key = "sk-your-platform-key"
 EOF
 
 chmod 600 ~/.dw/credentials.toml
@@ -104,18 +100,11 @@ EOF
 ### Verify
 
 ```bash
-# Should show your config
 dw config show
-
-# Should show your account
 dw account current
 dw account list
-
-# Should show your user info (uses platform key)
-dw whoami
-
-# Should list models (uses platform key)
-dw models list
+dw whoami          # uses platform key
+dw models list     # uses platform key
 ```
 
 If `dw whoami` works, both keys are configured correctly.
@@ -130,25 +119,55 @@ streaming, and real-time inference — but not models, whoami, or webhooks:
 dw login --api-key "sk-your-inference-key"
 ```
 
-## 3. Models (requires platform key — browser login)
-
-These commands require a platform key. With API key auth, they will error with "No platform API key configured."
+## 3. Config
 
 ```bash
-# List all available models
+# Show current config
+dw config show
+
+# Set both URLs (e.g. staging)
+dw config set-url https://staging.doubleword.ai
+dw config show
+
+# Set individually
+dw config set-ai-url https://api.doubleword.ai
+dw config set-admin-url https://app.doubleword.ai
+dw config show
+
+# Reset to defaults
+dw config reset-urls
+dw config show
+
+# Per-command override (not persisted)
+dw --server https://staging.doubleword.ai models list
+```
+
+## 4. Models (requires platform key)
+
+```bash
+# List all available models (auto-paginates)
 dw models list
 
 # JSON output (for piping)
 dw models list --output json
 
-# Plain output
+# Plain output (just aliases)
 dw models list --output plain
 
-# Get specific model (use an alias from the list)
+# Filter by type
+dw models list --type chat
+
+# Get specific model by alias
 dw models get <model-alias>
+
+# Get by UUID
+dw models get <model-uuid>
+
+# JSON detail
+dw models get <model-alias> --output json
 ```
 
-## 4. Local JSONL Tools (No API Calls)
+## 5. Local JSONL Tools (No API Calls)
 
 Create a test JSONL file first:
 
@@ -200,7 +219,7 @@ wc -l /tmp/test.jsonl /tmp/removed.jsonl
 cat /tmp/removed.jsonl
 ```
 
-## 5. File Upload & Management
+## 6. File Upload & Management
 
 ```bash
 # Upload the test file
@@ -209,12 +228,19 @@ dw files upload /tmp/test.jsonl
 # Upload with model override (transforms before upload)
 dw files upload /tmp/test.jsonl --model "Qwen/Qwen3-VL-30B-A3B-Instruct-FP8"
 
-# List files
+# List files (default: 20, shows pagination hint if more)
 dw files list
 dw files list --output json
+dw files list --output plain
+
+# Pagination
+dw files list -n 5                          # First 5 files
+dw files list -n 5 --after <last-file-id>   # Next page (use ID from hint)
+dw files list --all                         # Fetch all (auto-paginates)
 
 # Get file metadata (use ID from upload output)
 dw files get <file-id>
+dw files get <file-id> --output json
 
 # Download file content
 dw files content <file-id>
@@ -232,7 +258,7 @@ dw files delete <file-id>
 dw files delete <file-id> --yes
 ```
 
-## 6. Batch Workflow
+## 7. Batch Workflow
 
 ```bash
 # Upload a file first
@@ -245,9 +271,11 @@ dw batches create --file <file-id> --completion-window 24h
 # List batches
 dw batches list
 dw batches list --active-first
+dw batches list --output json
 
 # Get batch details
 dw batches get <batch-id>
+dw batches get <batch-id> --output json
 
 # Watch progress (polls every 2s, Ctrl+C to stop)
 dw batches watch <batch-id>
@@ -257,7 +285,7 @@ dw batches results <batch-id>
 dw batches results <batch-id> --output-file /tmp/results.jsonl
 ```
 
-## 7. Batch Run (Composite Command)
+## 8. Batch Run (Composite Command)
 
 ```bash
 # Upload + create in one step
@@ -276,7 +304,7 @@ cp /tmp/test.jsonl /tmp/batch-dir/batch2.jsonl
 dw batches run /tmp/batch-dir/
 ```
 
-## 8. Stream (Zero to Results)
+## 9. Stream (Zero to Results)
 
 ```bash
 # Upload + batch + watch + pipe results to stdout
@@ -293,7 +321,7 @@ dw stream /tmp/test.jsonl --model "Qwen/Qwen3-VL-30B-A3B-Instruct-FP8"
 dw stream /tmp/test.jsonl --completion-window 1h
 ```
 
-## 9. Real-Time Inference
+## 10. Real-Time Inference
 
 ```bash
 # Basic prompt (streams tokens)
@@ -319,7 +347,7 @@ echo "Translate to French: Hello world" | dw realtime "Qwen/Qwen3-VL-30B-A3B-Ins
 echo "Summarize this in one line" | dw realtime "Qwen/Qwen3-VL-30B-A3B-Instruct-FP8" > /tmp/summary.txt
 ```
 
-## 10. Batch Cancel & Retry
+## 11. Batch Cancel & Retry
 
 ```bash
 # Create a batch and then cancel it
@@ -331,7 +359,16 @@ dw batches cancel <batch-id> --yes  # skip prompt
 dw batches retry <batch-id>
 ```
 
-## 11. Examples
+## 12. Webhooks (requires platform key)
+
+```bash
+dw webhooks create --url https://example.com/hook --events batch.completed
+dw webhooks list
+dw webhooks rotate-secret <webhook-id>
+dw webhooks delete <webhook-id> --yes
+```
+
+## 13. Examples
 
 ```bash
 # List available examples
@@ -346,15 +383,11 @@ dw examples clone model-evals --dir /tmp/my-evals
 ls /tmp/my-evals/
 ```
 
-## 12. Output Formats
+## 14. Output Formats
 
 Test each command with all three output modes:
 
 ```bash
-dw models list --output table
-dw models list --output json
-dw models list --output plain
-
 dw files list --output table
 dw files list --output json
 dw files list --output plain
@@ -363,12 +396,12 @@ dw batches list --output table
 dw batches list --output json
 
 # Verify auto-detection: pipe should default to JSON
-dw models list | head -1
+dw files list | head -1
 # vs terminal should default to table
-dw models list
+dw files list
 ```
 
-## 13. Account Management
+## 15. Account Management
 
 ```bash
 # Current account
@@ -378,15 +411,12 @@ dw account current
 dw account list
 
 # The --account flag should override active account (will error if doesn't exist)
-dw models list --account nonexistent
+dw files list --account nonexistent
 ```
 
-## 14. Error Handling
+## 16. Error Handling
 
 ```bash
-# Invalid API key
-dw login --api-key "sk-invalid-key"
-
 # Nonexistent resource
 dw files get "file-nonexistent-id"
 dw batches get "batch-nonexistent-id"
@@ -395,12 +425,12 @@ dw batches get "batch-nonexistent-id"
 dw files upload /tmp/nonexistent.jsonl
 dw batches run /tmp/nonexistent.jsonl
 
-# Missing auth (logout first)
+# Missing auth (logout first, then try a command)
 dw logout
-dw models list
+dw files list
 ```
 
-## 15. Shell Completions
+## 17. Shell Completions
 
 ```bash
 # Generate and test (don't source permanently yet)
@@ -411,11 +441,10 @@ dw completions bash > /tmp/dw-completions.bash
 head -20 /tmp/dw-completions.bash
 ```
 
-## 16. Cleanup
+## 18. Cleanup
 
 ```bash
-# Re-login for continued use
-dw login --api-key "sk-your-key-here"
+# Re-setup credentials (see section 2)
 
 # Clean up test files
 rm -f /tmp/test.jsonl /tmp/bad.jsonl /tmp/missing.jsonl
@@ -439,3 +468,4 @@ rm -rf synthetic-data-generation/
   - `dw webhooks *` (requires platform key)
 - `dw realtime` streaming parses the full SSE body at once (not true incremental streaming yet)
 - `dw examples clone` requires network access to GitHub
+- Batches list doesn't yet have cursor pagination (files list does)
