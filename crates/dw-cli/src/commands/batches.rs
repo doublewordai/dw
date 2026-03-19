@@ -327,8 +327,34 @@ pub async fn watch_single(
     bar.set_style(style);
     bar.set_message(format!("{} — waiting", batch_id));
 
+    let mut consecutive_errors: u32 = 0;
+    const MAX_RETRIES: u32 = 3;
+
     loop {
-        let batch = client.get_batch(batch_id).await?;
+        let batch = match client.get_batch(batch_id).await {
+            Ok(b) => {
+                consecutive_errors = 0;
+                b
+            }
+            Err(e) => {
+                consecutive_errors += 1;
+                if consecutive_errors > MAX_RETRIES {
+                    bar.abandon_with_message(format!("{} — connection lost", batch_id));
+                    anyhow::bail!(
+                        "Lost connection to server after {} retries: {}",
+                        MAX_RETRIES,
+                        e
+                    );
+                }
+                let delay = 2u64.pow(consecutive_errors);
+                bar.set_message(format!(
+                    "{} — retrying ({}/{})",
+                    batch_id, consecutive_errors, MAX_RETRIES
+                ));
+                tokio::time::sleep(Duration::from_secs(delay)).await;
+                continue;
+            }
+        };
 
         if let Some(rc) = &batch.request_counts {
             let done = (rc.completed + rc.failed) as u64;

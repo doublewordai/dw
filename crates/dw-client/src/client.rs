@@ -157,39 +157,75 @@ impl DwClient {
     }
 
     /// Send a request and parse the JSON response, handling errors.
+    /// Automatically retries once on 429 (rate limited) after the specified delay.
     pub async fn send<T: serde::de::DeserializeOwned>(
         &self,
         request: reqwest::RequestBuilder,
     ) -> Result<T, DwError> {
-        let response = request.send().await?;
-
-        if response.status().is_success() {
-            Ok(response.json().await?)
-        } else {
-            Err(DwError::from_response(response).await)
-        }
+        let response = self.send_with_retry(request).await?;
+        Ok(response.json().await?)
     }
 
     /// Send a request and return raw bytes (for file content downloads).
+    /// Automatically retries once on 429.
     pub async fn send_bytes(
         &self,
         request: reqwest::RequestBuilder,
     ) -> Result<bytes::Bytes, DwError> {
-        let response = request.send().await?;
-
-        if response.status().is_success() {
-            Ok(response.bytes().await?)
-        } else {
-            Err(DwError::from_response(response).await)
-        }
+        let response = self.send_with_retry(request).await?;
+        Ok(response.bytes().await?)
     }
 
     /// Send a request expecting no response body (204, etc).
+    /// Automatically retries once on 429.
     pub async fn send_empty(&self, request: reqwest::RequestBuilder) -> Result<(), DwError> {
+        self.send_with_retry(request).await?;
+        Ok(())
+    }
+
+    /// Send a request, retrying once on 429 (rate limited).
+    ///
+    /// If the server returns 429 with a `Retry-After` header or `retry_after_seconds`
+    /// in the body, waits that duration before retrying. Defaults to 30 seconds.
+    async fn send_with_retry(
+        &self,
+        request: reqwest::RequestBuilder,
+    ) -> Result<reqwest::Response, DwError> {
+        // Try to clone the request for potential retry
+        let retry_request = request.try_clone();
+
         let response = request.send().await?;
 
+        if response.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
+            // Extract retry delay from Retry-After header or response body
+            let retry_after = response
+                .headers()
+                .get("retry-after")
+                .and_then(|v| v.to_str().ok())
+                .and_then(|v| v.parse::<u64>().ok())
+                .unwrap_or(30);
+
+            tracing::warn!("Rate limited (429). Retrying after {}s...", retry_after);
+            eprintln!("Rate limited. Retrying in {}s...", retry_after);
+            tokio::time::sleep(Duration::from_secs(retry_after)).await;
+
+            // Retry if we could clone the request
+            if let Some(retry) = retry_request {
+                let response = retry.send().await?;
+                if response.status().is_success() {
+                    return Ok(response);
+                }
+                return Err(DwError::from_response(response).await);
+            }
+
+            // Can't retry (request body was streamed) — return the rate limit error
+            return Err(DwError::RateLimited {
+                retry_after: Some(retry_after),
+            });
+        }
+
         if response.status().is_success() {
-            Ok(())
+            Ok(response)
         } else {
             Err(DwError::from_response(response).await)
         }
