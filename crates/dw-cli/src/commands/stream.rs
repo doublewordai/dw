@@ -156,6 +156,7 @@ async fn stream_with_multi(
 }
 
 /// Core streaming loop: poll for completed results and write to stdout.
+/// Retries transient network errors up to 3 times with exponential backoff.
 async fn stream_loop(
     client: &DwClient,
     batch_id: &str,
@@ -164,11 +165,31 @@ async fn stream_loop(
 ) -> anyhow::Result<()> {
     let mut cursor: usize = 0;
     let page_size: usize = 100;
+    let mut consecutive_errors: u32 = 0;
+    const MAX_RETRIES: u32 = 3;
 
     loop {
-        let page = client
+        // Fetch results page — retry on transient errors
+        let page = match client
             .get_batch_results_page(batch_id, cursor, page_size, Some("completed"))
-            .await?;
+            .await
+        {
+            Ok(p) => p,
+            Err(e) => {
+                consecutive_errors += 1;
+                if consecutive_errors > MAX_RETRIES {
+                    bar.abandon_with_message(format!("{} — connection lost", batch_id));
+                    anyhow::bail!("Lost connection after {} retries: {}", MAX_RETRIES, e);
+                }
+                let delay = 2u64.pow(consecutive_errors);
+                bar.set_message(format!(
+                    "{} — retrying ({}/{})",
+                    batch_id, consecutive_errors, MAX_RETRIES
+                ));
+                tokio::time::sleep(Duration::from_secs(delay)).await;
+                continue;
+            }
+        };
 
         if !page.body.is_empty() {
             let mut out = stdout.lock().await;
@@ -178,7 +199,27 @@ async fn stream_loop(
             cursor = page.last_line;
         }
 
-        let batch = client.get_batch(batch_id).await?;
+        // Fetch batch status — retry on transient errors
+        let batch = match client.get_batch(batch_id).await {
+            Ok(b) => {
+                consecutive_errors = 0;
+                b
+            }
+            Err(e) => {
+                consecutive_errors += 1;
+                if consecutive_errors > MAX_RETRIES {
+                    bar.abandon_with_message(format!("{} — connection lost", batch_id));
+                    anyhow::bail!("Lost connection after {} retries: {}", MAX_RETRIES, e);
+                }
+                let delay = 2u64.pow(consecutive_errors);
+                bar.set_message(format!(
+                    "{} — retrying ({}/{})",
+                    batch_id, consecutive_errors, MAX_RETRIES
+                ));
+                tokio::time::sleep(Duration::from_secs(delay)).await;
+                continue;
+            }
+        };
         if let Some(rc) = &batch.request_counts {
             let done = (rc.completed + rc.failed) as u64;
             let total = rc.total as u64;
