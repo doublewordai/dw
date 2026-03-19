@@ -336,7 +336,7 @@ pub async fn watch_single(
                 consecutive_errors = 0;
                 b
             }
-            Err(e) => {
+            Err(e) if e.is_transient() => {
                 consecutive_errors += 1;
                 if consecutive_errors > MAX_RETRIES {
                     bar.abandon_with_message(format!("{} — connection lost", batch_id));
@@ -353,6 +353,11 @@ pub async fn watch_single(
                 ));
                 tokio::time::sleep(Duration::from_secs(delay)).await;
                 continue;
+            }
+            Err(e) => {
+                // Non-transient error (auth, 4xx, etc.) — fail immediately
+                bar.abandon_with_message(format!("{} — error", batch_id));
+                return Err(e.into());
             }
         };
 

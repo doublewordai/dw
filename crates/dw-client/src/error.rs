@@ -64,6 +64,18 @@ pub enum DwError {
 }
 
 impl DwError {
+    /// Whether this error is transient and worth retrying.
+    ///
+    /// Network errors, timeouts, rate limits, and 5xx server errors are transient.
+    /// Auth errors, 4xx client errors, and config errors are permanent.
+    pub fn is_transient(&self) -> bool {
+        match self {
+            DwError::Network(_) | DwError::RateLimited { .. } => true,
+            DwError::Api { status, .. } => *status >= 500,
+            _ => false,
+        }
+    }
+
     /// Parse an HTTP response into a `DwError`.
     pub async fn from_response(response: reqwest::Response) -> Self {
         let status = response.status().as_u16();

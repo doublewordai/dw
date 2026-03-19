@@ -185,8 +185,10 @@ impl DwClient {
 
     /// Send a request, retrying once on 429 (rate limited).
     ///
-    /// If the server returns 429 with a `Retry-After` header or `retry_after_seconds`
-    /// in the body, waits that duration before retrying. Defaults to 30 seconds.
+    /// On 429, extracts the retry delay from the `Retry-After` header (integer
+    /// seconds only; HTTP-date values fall back to the default) or the
+    /// `retry_after_seconds` field in the JSON response body. Defaults to 30s
+    /// if neither is present.
     async fn send_with_retry(
         &self,
         request: reqwest::RequestBuilder,
@@ -197,16 +199,30 @@ impl DwClient {
         let response = request.send().await?;
 
         if response.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
-            // Extract retry delay from Retry-After header or response body
-            let retry_after = response
+            // Extract retry delay from Retry-After header (integer seconds)
+            let header_retry = response
                 .headers()
                 .get("retry-after")
                 .and_then(|v| v.to_str().ok())
-                .and_then(|v| v.parse::<u64>().ok())
-                .unwrap_or(30);
+                .and_then(|v| v.parse::<u64>().ok());
 
-            tracing::warn!("Rate limited (429). Retrying after {}s...", retry_after);
-            eprintln!("Rate limited. Retrying in {}s...", retry_after);
+            // If no valid header, try parsing the body for retry_after_seconds
+            let retry_after = if let Some(secs) = header_retry {
+                secs
+            } else {
+                let body = response
+                    .json::<crate::error::ApiErrorBody>()
+                    .await
+                    .unwrap_or(crate::error::ApiErrorBody {
+                        error: None,
+                        message: None,
+                        retry_after_seconds: None,
+                    });
+                body.retry_after_seconds.unwrap_or(30)
+            };
+
+            tracing::warn!(retry_after, "Rate limited (429), retrying");
+
             tokio::time::sleep(Duration::from_secs(retry_after)).await;
 
             // Retry if we could clone the request
