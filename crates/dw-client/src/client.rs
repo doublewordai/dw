@@ -206,8 +206,11 @@ impl DwClient {
                 .and_then(|v| v.to_str().ok())
                 .and_then(|v| v.parse::<u64>().ok());
 
-            // If no valid header, try parsing the body for retry_after_seconds
+            // If no valid header, try parsing the body for retry_after_seconds.
+            // Always consume the body to allow connection reuse in the pool.
             let retry_after = if let Some(secs) = header_retry {
+                // Drain the body even though we already have the delay from headers
+                let _ = response.bytes().await;
                 secs
             } else {
                 let body = response
