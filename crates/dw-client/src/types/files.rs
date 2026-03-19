@@ -54,6 +54,8 @@ pub struct ModelCostBreakdown {
 /// Response wrapper for file list (OpenAI-compatible cursor pagination).
 #[derive(Debug, Deserialize)]
 pub struct FileListResponse {
+    #[serde(default)]
+    pub object: String,
     pub data: Vec<FileResponse>,
     #[serde(default)]
     pub has_more: bool,

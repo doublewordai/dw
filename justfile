@@ -32,6 +32,10 @@ ci: lint test
 check:
     cargo check --workspace
 
+# Validate types against OpenAPI specs (requires a running server)
+validate-types server="http://localhost:3001":
+    python3 scripts/validate-types.py --server {{server}}
+
 # Clean build artifacts
 clean:
     cargo clean

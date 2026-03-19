@@ -49,3 +49,24 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --workspace
+
+  type-check:
+    name: Type Validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Fetch OpenAPI specs from production
+        env:
+          DW_PLATFORM_KEY: ${{ secrets.DW_PLATFORM_KEY }}
+        run: |
+          curl -sf -H "Authorization: Bearer $DW_PLATFORM_KEY" \
+            https://app.doubleword.ai/ai/openapi.json -o /tmp/ai-openapi.json
+          curl -sf -H "Authorization: Bearer $DW_PLATFORM_KEY" \
+            https://app.doubleword.ai/admin/openapi.json -o /tmp/admin-openapi.json
+      - name: Validate types against AI OpenAPI spec
+        run: python3 scripts/validate-types.py --spec-file /tmp/ai-openapi.json --surface ai
+      - name: Validate types against Admin OpenAPI spec
+        run: python3 scripts/validate-types.py --spec-file /tmp/admin-openapi.json --surface admin

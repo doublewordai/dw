@@ -63,6 +63,8 @@ pub struct ListBatchesParams {
 /// Batch list response (cursor pagination).
 #[derive(Debug, Deserialize)]
 pub struct BatchListResponse {
+    #[serde(default)]
+    pub object: String,
     pub data: Vec<BatchResponse>,
     #[serde(default)]
     pub has_more: bool,
