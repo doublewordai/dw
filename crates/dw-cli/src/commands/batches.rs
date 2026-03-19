@@ -173,6 +173,9 @@ pub async fn results(
 }
 
 /// Upload file(s) and create batch(es) in one step.
+///
+/// When `--watch` is used with multiple files, each batch starts being
+/// watched as soon as it's created — uploads and watches run concurrently.
 pub async fn run(
     client: &DwClient,
     args: &BatchRunArgs,
@@ -184,8 +187,15 @@ pub async fn run(
         anyhow::bail!("No .jsonl files found at {}", args.path.display());
     }
 
+    let multi = if args.watch && paths.len() > 1 {
+        Some(indicatif::MultiProgress::new())
+    } else {
+        None
+    };
+
+    let mut watch_handles: Vec<tokio::task::JoinHandle<anyhow::Result<()>>> = Vec::new();
+
     for path in &paths {
-        // Apply model override if specified
         let upload_path = if args.model.is_some() {
             let transforms = jsonl::Transforms {
                 model: args.model.clone(),
@@ -198,7 +208,11 @@ pub async fn run(
 
         let actual_path = upload_path.as_deref().unwrap_or(path);
 
-        let spinner = indicatif::ProgressBar::new_spinner();
+        let spinner = if let Some(ref mp) = multi {
+            mp.add(indicatif::ProgressBar::new_spinner())
+        } else {
+            indicatif::ProgressBar::new_spinner()
+        };
         spinner.set_style(
             indicatif::ProgressStyle::default_spinner()
                 .template("{spinner:.green} {msg}")
@@ -216,7 +230,11 @@ pub async fn run(
             metadata: None,
         };
 
-        let spinner = indicatif::ProgressBar::new_spinner();
+        let spinner = if let Some(ref mp) = multi {
+            mp.add(indicatif::ProgressBar::new_spinner())
+        } else {
+            indicatif::ProgressBar::new_spinner()
+        };
         spinner.set_style(
             indicatif::ProgressStyle::default_spinner()
                 .template("{spinner:.green} {msg}")
@@ -228,25 +246,85 @@ pub async fn run(
         spinner.finish_with_message(format!("Created batch: {}", batch.id));
 
         if args.watch {
-            watch_batch(client, &batch.id).await?;
+            // Spawn watch immediately — runs concurrently while we upload the next file
+            let client = client.clone();
+            let batch_id = batch.id.clone();
+            let multi_clone = multi.clone();
+            watch_handles.push(tokio::spawn(async move {
+                watch_single(&client, &batch_id, multi_clone.as_ref()).await
+            }));
         } else {
             print_item(&batch, format);
         }
     }
+
+    // Wait for all watches to complete
+    let mut had_failure = false;
+    for handle in watch_handles {
+        if let Err(e) = handle.await? {
+            eprintln!("Error: {}", e);
+            had_failure = true;
+        }
+    }
+    if had_failure {
+        anyhow::bail!("One or more batches failed");
+    }
+
     Ok(())
 }
 
-/// Watch a batch until completion with a progress bar.
-pub async fn watch_batch(client: &DwClient, batch_id: &str) -> anyhow::Result<()> {
+/// Watch one or more batches until completion with parallel progress bars.
+pub async fn watch_batches(client: &DwClient, batch_ids: &[String]) -> anyhow::Result<()> {
+    if batch_ids.len() == 1 {
+        return watch_single(client, &batch_ids[0], None).await;
+    }
+
+    let multi = indicatif::MultiProgress::new();
+    let mut handles = Vec::new();
+
+    for batch_id in batch_ids {
+        let client = client.clone();
+        let batch_id = batch_id.clone();
+        let multi = multi.clone();
+        handles.push(tokio::spawn(async move {
+            watch_single(&client, &batch_id, Some(&multi)).await
+        }));
+    }
+
+    let mut had_failure = false;
+    for handle in handles {
+        if let Err(e) = handle.await? {
+            eprintln!("Error: {}", e);
+            had_failure = true;
+        }
+    }
+
+    if had_failure {
+        anyhow::bail!("One or more batches failed");
+    }
+    Ok(())
+}
+
+/// Watch a single batch with a progress bar. If `multi` is provided, the bar
+/// is added to the multi-progress group; otherwise it's standalone.
+pub async fn watch_single(
+    client: &DwClient,
+    batch_id: &str,
+    multi: Option<&indicatif::MultiProgress>,
+) -> anyhow::Result<()> {
     use indicatif::{ProgressBar, ProgressStyle};
 
-    let bar = ProgressBar::new(0);
-    bar.set_style(
-        ProgressStyle::default_bar()
-            .template("  {msg} [{bar:30.green/dim}] {pos}/{len} ({percent}%)")
-            .unwrap()
-            .progress_chars("█▓░"),
-    );
+    let style = ProgressStyle::default_bar()
+        .template("  {msg} [{bar:30.green/dim}] {pos}/{len} ({percent}%)")
+        .unwrap()
+        .progress_chars("█▓░");
+
+    let bar = if let Some(mp) = multi {
+        mp.add(ProgressBar::new(0))
+    } else {
+        ProgressBar::new(0)
+    };
+    bar.set_style(style);
     bar.set_message(format!("{} — waiting", batch_id));
 
     loop {

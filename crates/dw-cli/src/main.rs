@@ -196,8 +196,8 @@ async fn run() -> anyhow::Result<()> {
                     BatchCommands::Run(args) => {
                         commands::batches::run(&client, &args, format).await
                     }
-                    BatchCommands::Watch { id } => {
-                        commands::batches::watch_batch(&client, &id).await
+                    BatchCommands::Watch { ids } => {
+                        commands::batches::watch_batches(&client, &ids).await
                     }
                 },
 

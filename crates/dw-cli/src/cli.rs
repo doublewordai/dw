@@ -336,10 +336,11 @@ pub enum BatchCommands {
     },
     /// Upload and create a batch in one step.
     Run(BatchRunArgs),
-    /// Watch a batch's progress until completion.
+    /// Watch one or more batches' progress until completion.
     Watch {
-        /// Batch ID.
-        id: String,
+        /// Batch ID(s).
+        #[arg(required = true)]
+        ids: Vec<String>,
     },
 }
 
