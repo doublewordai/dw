@@ -67,9 +67,22 @@ pub async fn upload(
 
     let path = upload_path.as_deref().unwrap_or(&args.path);
 
-    eprintln!("Uploading {}...", args.path.display());
+    let spinner = indicatif::ProgressBar::new_spinner();
+    spinner.set_style(
+        indicatif::ProgressStyle::default_spinner()
+            .template("{spinner:.green} {msg}")
+            .unwrap(),
+    );
+    spinner.set_message(format!("Uploading {}...", args.path.display()));
+    spinner.enable_steady_tick(std::time::Duration::from_millis(100));
+
     let file = client.upload_file(path, "batch").await?;
-    eprintln!("Uploaded: {}", file.id);
+
+    spinner.finish_with_message(format!(
+        "Uploaded {} ({})",
+        file.id,
+        format_bytes(file.bytes)
+    ));
     print_item(&file, format);
     Ok(())
 }

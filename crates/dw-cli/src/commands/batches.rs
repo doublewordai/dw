@@ -63,8 +63,16 @@ pub async fn create(
         metadata,
     };
 
+    let spinner = indicatif::ProgressBar::new_spinner();
+    spinner.set_style(
+        indicatif::ProgressStyle::default_spinner()
+            .template("{spinner:.green} {msg}")
+            .unwrap(),
+    );
+    spinner.set_message("Creating batch...");
+    spinner.enable_steady_tick(std::time::Duration::from_millis(100));
     let batch = client.create_batch(&request).await?;
-    eprintln!("Created batch: {}", batch.id);
+    spinner.finish_with_message(format!("Created batch: {}", batch.id));
     print_item(&batch, format);
     Ok(())
 }
@@ -190,9 +198,16 @@ pub async fn run(
 
         let actual_path = upload_path.as_deref().unwrap_or(path);
 
-        eprintln!("Uploading {}...", path.display());
+        let spinner = indicatif::ProgressBar::new_spinner();
+        spinner.set_style(
+            indicatif::ProgressStyle::default_spinner()
+                .template("{spinner:.green} {msg}")
+                .unwrap(),
+        );
+        spinner.set_message(format!("Uploading {}...", path.display()));
+        spinner.enable_steady_tick(std::time::Duration::from_millis(100));
         let file = client.upload_file(actual_path, "batch").await?;
-        eprintln!("Uploaded: {} ({})", file.id, file.filename);
+        spinner.finish_with_message(format!("Uploaded {} ({})", file.id, file.filename));
 
         let request = CreateBatchRequest {
             input_file_id: file.id.clone(),
@@ -201,8 +216,16 @@ pub async fn run(
             metadata: None,
         };
 
+        let spinner = indicatif::ProgressBar::new_spinner();
+        spinner.set_style(
+            indicatif::ProgressStyle::default_spinner()
+                .template("{spinner:.green} {msg}")
+                .unwrap(),
+        );
+        spinner.set_message("Creating batch...");
+        spinner.enable_steady_tick(std::time::Duration::from_millis(100));
         let batch = client.create_batch(&request).await?;
-        eprintln!("Created batch: {}", batch.id);
+        spinner.finish_with_message(format!("Created batch: {}", batch.id));
 
         if args.watch {
             watch_batch(client, &batch.id).await?;
@@ -213,41 +236,47 @@ pub async fn run(
     Ok(())
 }
 
-/// Watch a batch until completion, printing progress.
+/// Watch a batch until completion with a progress bar.
 pub async fn watch_batch(client: &DwClient, batch_id: &str) -> anyhow::Result<()> {
-    use std::io::Write;
+    use indicatif::{ProgressBar, ProgressStyle};
 
-    eprintln!("Watching batch {}...", batch_id);
+    let bar = ProgressBar::new(0);
+    bar.set_style(
+        ProgressStyle::default_bar()
+            .template("  {msg} [{bar:30.green/dim}] {pos}/{len} ({percent}%)")
+            .unwrap()
+            .progress_chars("█▓░"),
+    );
+    bar.set_message(format!("{} — waiting", batch_id));
 
     loop {
         let batch = client.get_batch(batch_id).await?;
 
-        let progress = batch
-            .request_counts
-            .as_ref()
-            .map(|rc| {
-                let done = rc.completed + rc.failed;
-                let pct = if rc.total > 0 {
-                    (done as f64 / rc.total as f64) * 100.0
-                } else {
-                    0.0
-                };
-                format!(
-                    "{}/{} ({:.0}%) — {} completed, {} failed",
-                    done, rc.total, pct, rc.completed, rc.failed
-                )
-            })
-            .unwrap_or_else(|| "waiting...".to_string());
+        if let Some(rc) = &batch.request_counts {
+            let done = (rc.completed + rc.failed) as u64;
+            let total = rc.total as u64;
 
-        eprint!("\r\x1b[K  [{}] {}", batch.status, progress);
-        std::io::stderr().flush()?;
+            if bar.length().unwrap_or(0) != total {
+                bar.set_length(total);
+            }
+            bar.set_position(done);
+
+            let failed_str = if rc.failed > 0 {
+                format!(", {} failed", rc.failed)
+            } else {
+                String::new()
+            };
+            bar.set_message(format!("{} — {}{}", batch_id, batch.status, failed_str));
+        } else {
+            bar.set_message(format!("{} — {}", batch_id, batch.status));
+        }
 
         if batch.is_terminal() {
-            eprintln!();
-            eprintln!("Batch {} {}.", batch_id, batch.status);
             if batch.status == "completed" {
+                bar.finish_with_message(format!("{} — completed", batch_id));
                 return Ok(());
             } else {
+                bar.abandon_with_message(format!("{} — {}", batch_id, batch.status));
                 anyhow::bail!("Batch {} ended with status: {}", batch_id, batch.status);
             }
         }

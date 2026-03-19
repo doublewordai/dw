@@ -69,4 +69,65 @@ impl DwClient {
 
         self.get_file_content(&output_file_id).await
     }
+
+    /// Fetch a page of batch results with pagination.
+    ///
+    /// Returns the JSONL body, whether more results are available (`X-Incomplete`),
+    /// and the offset of the last line returned (`X-Last-Line`).
+    ///
+    /// Corresponds to `GET /v1/batches/{batch_id}/results?skip=N&limit=M&status=S`.
+    pub async fn get_batch_results_page(
+        &self,
+        batch_id: &str,
+        skip: usize,
+        limit: usize,
+        status: Option<&str>,
+    ) -> Result<BatchResultsPage, DwError> {
+        let mut query_params: Vec<(&str, String)> =
+            vec![("skip", skip.to_string()), ("limit", limit.to_string())];
+        if let Some(s) = status {
+            query_params.push(("status", s.to_string()));
+        }
+
+        let request = self
+            .get(ApiSurface::Ai, &format!("/v1/batches/{}/results", batch_id))?
+            .query(&query_params);
+
+        let response = request.send().await?;
+
+        if !response.status().is_success() {
+            return Err(DwError::from_response(response).await);
+        }
+
+        let incomplete = response
+            .headers()
+            .get("x-incomplete")
+            .and_then(|v| v.to_str().ok())
+            .is_some_and(|v| v == "true");
+
+        let last_line = response
+            .headers()
+            .get("x-last-line")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|v| v.parse::<usize>().ok())
+            .unwrap_or(skip);
+
+        let body = response.text().await?;
+
+        Ok(BatchResultsPage {
+            body,
+            incomplete,
+            last_line,
+        })
+    }
+}
+
+/// A page of batch results from the paginated results endpoint.
+pub struct BatchResultsPage {
+    /// The JSONL content for this page.
+    pub body: String,
+    /// Whether more results are available (more pages or batch still processing).
+    pub incomplete: bool,
+    /// The offset of the last line returned.
+    pub last_line: usize,
 }

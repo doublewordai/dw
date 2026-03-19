@@ -1,11 +1,16 @@
+use std::time::Duration;
+
 use dw_client::DwClient;
 use dw_client::types::batches::CreateBatchRequest;
 
 use crate::cli::StreamArgs;
-use crate::commands::batches;
 use crate::jsonl;
 
-/// Upload, create batch, watch progress (stderr), and stream results to stdout.
+/// Upload, create batch, and stream results to stdout as they complete.
+///
+/// Progress goes to stderr, results to stdout. Results are streamed
+/// incrementally — they appear as soon as individual requests complete,
+/// not after the whole batch finishes.
 pub async fn run(client: &DwClient, args: &StreamArgs) -> anyhow::Result<()> {
     let paths = collect_jsonl_paths(&args.path)?;
 
@@ -27,10 +32,19 @@ pub async fn run(client: &DwClient, args: &StreamArgs) -> anyhow::Result<()> {
 
         let actual_path = upload_path.as_deref().unwrap_or(path);
 
-        eprintln!("Uploading {}...", path.display());
+        // Upload with spinner
+        let spinner = indicatif::ProgressBar::new_spinner();
+        spinner.set_style(
+            indicatif::ProgressStyle::default_spinner()
+                .template("{spinner:.green} {msg}")
+                .unwrap(),
+        );
+        spinner.set_message(format!("Uploading {}...", path.display()));
+        spinner.enable_steady_tick(Duration::from_millis(100));
         let file = client.upload_file(actual_path, "batch").await?;
-        eprintln!("Uploaded: {} ({})", file.id, file.filename);
+        spinner.finish_with_message(format!("Uploaded {} ({})", file.id, file.filename));
 
+        // Create batch with spinner
         let request = CreateBatchRequest {
             input_file_id: file.id.clone(),
             endpoint: "/v1/chat/completions".to_string(),
@@ -38,19 +52,100 @@ pub async fn run(client: &DwClient, args: &StreamArgs) -> anyhow::Result<()> {
             metadata: None,
         };
 
+        let spinner = indicatif::ProgressBar::new_spinner();
+        spinner.set_style(
+            indicatif::ProgressStyle::default_spinner()
+                .template("{spinner:.green} {msg}")
+                .unwrap(),
+        );
+        spinner.set_message("Creating batch...");
+        spinner.enable_steady_tick(Duration::from_millis(100));
         let batch = client.create_batch(&request).await?;
-        eprintln!("Created batch: {}", batch.id);
+        spinner.finish_with_message(format!("Created batch: {}", batch.id));
 
-        // Watch until completion
-        batches::watch_batch(client, &batch.id).await?;
-
-        // Stream results to stdout
-        let results = client.get_batch_results(&batch.id).await?;
-        use std::io::Write;
-        std::io::stdout().write_all(&results)?;
+        // Stream results incrementally as they complete
+        stream_results(client, &batch.id).await?;
     }
 
     Ok(())
+}
+
+/// Poll for completed results and stream them to stdout as they arrive.
+/// Shows a progress bar on stderr while waiting.
+async fn stream_results(client: &DwClient, batch_id: &str) -> anyhow::Result<()> {
+    use indicatif::{ProgressBar, ProgressStyle};
+    use std::io::Write;
+
+    let bar = ProgressBar::new(0);
+    bar.set_style(
+        ProgressStyle::default_bar()
+            .template("  {msg} [{bar:30.green/dim}] {pos}/{len} ({percent}%)")
+            .unwrap()
+            .progress_chars("█▓░"),
+    );
+    bar.set_message(format!("{} — streaming", batch_id));
+
+    let mut cursor: usize = 0;
+    let page_size: usize = 100;
+
+    loop {
+        // Fetch the next page of completed results
+        let page = client
+            .get_batch_results_page(batch_id, cursor, page_size, Some("completed"))
+            .await?;
+
+        // Write any new results to stdout immediately
+        if !page.body.is_empty() {
+            std::io::stdout().write_all(page.body.as_bytes())?;
+            std::io::stdout().flush()?;
+            cursor = page.last_line;
+        }
+
+        // Update progress bar from batch status
+        let batch = client.get_batch(batch_id).await?;
+        if let Some(rc) = &batch.request_counts {
+            let done = (rc.completed + rc.failed) as u64;
+            let total = rc.total as u64;
+            if bar.length().unwrap_or(0) != total {
+                bar.set_length(total);
+            }
+            bar.set_position(done);
+
+            let failed_str = if rc.failed > 0 {
+                format!(", {} failed", rc.failed)
+            } else {
+                String::new()
+            };
+            bar.set_message(format!("{} — {}{}", batch_id, batch.status, failed_str));
+        }
+
+        if batch.is_terminal() {
+            // Fetch any remaining results we haven't consumed yet
+            loop {
+                let final_page = client
+                    .get_batch_results_page(batch_id, cursor, page_size, Some("completed"))
+                    .await?;
+                if !final_page.body.is_empty() {
+                    std::io::stdout().write_all(final_page.body.as_bytes())?;
+                    cursor = final_page.last_line;
+                }
+                if !final_page.incomplete {
+                    break;
+                }
+            }
+            std::io::stdout().flush()?;
+
+            if batch.status == "completed" {
+                bar.finish_with_message(format!("{} — completed", batch_id));
+            } else {
+                bar.abandon_with_message(format!("{} — {}", batch_id, batch.status));
+            }
+            return Ok(());
+        }
+
+        // Poll interval — don't hammer the API
+        tokio::time::sleep(Duration::from_secs(2)).await;
+    }
 }
 
 fn collect_jsonl_paths(path: &std::path::Path) -> anyhow::Result<Vec<std::path::PathBuf>> {
