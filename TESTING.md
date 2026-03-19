@@ -336,6 +336,9 @@ dw realtime "Qwen/Qwen3-VL-30B-A3B-Instruct-FP8" "Write a haiku" --temperature 0
 # Non-streaming mode
 dw realtime "Qwen/Qwen3-VL-30B-A3B-Instruct-FP8" "Hello" --no-stream
 
+# With token usage (off by default)
+dw realtime "Qwen/Qwen3-VL-30B-A3B-Instruct-FP8" "Hello" --usage
+
 # Pipe to file
 dw realtime "Qwen/Qwen3-VL-30B-A3B-Instruct-FP8" "List 5 animals" --output-file /tmp/animals.txt
 cat /tmp/animals.txt

@@ -349,6 +349,7 @@ dependencies = [
  "dirs",
  "dw-client",
  "flate2",
+ "futures-util",
  "indicatif",
  "libc",
  "open",

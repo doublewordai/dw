@@ -51,15 +51,18 @@ pub async fn run(client: &DwClient, args: &RealtimeArgs) -> anyhow::Result<()> {
 
         write_output(content, args.output_file.as_deref())?;
 
-        // Print usage to stderr
-        if let Some(usage) = response.get("usage") {
+        if args.usage
+            && let Some(usage) = response.get("usage")
+        {
             eprintln!(
                 "\nTokens: {} input, {} output",
                 usage["prompt_tokens"], usage["completion_tokens"]
             );
         }
     } else {
-        // Streaming: process SSE events
+        // Streaming: process SSE events incrementally as bytes arrive
+        use futures_util::StreamExt;
+
         let response = request.send().await?;
 
         if !response.status().is_success() {
@@ -74,30 +77,44 @@ pub async fn run(client: &DwClient, args: &RealtimeArgs) -> anyhow::Result<()> {
         };
 
         let mut total_content = String::new();
-        let body_text = response.text().await?;
+        let mut line_buf = String::new();
+        let mut stream = response.bytes_stream();
 
-        for line in body_text.lines() {
-            let line = line.trim();
-            if line.is_empty() || line == "data: [DONE]" {
-                continue;
-            }
-            if let Some(data) = line.strip_prefix("data: ")
-                && let Ok(chunk) = serde_json::from_str::<serde_json::Value>(data)
-            {
-                if let Some(content) = chunk["choices"][0]["delta"]["content"].as_str() {
-                    write!(writer, "{}", content)?;
-                    writer.flush()?;
-                    total_content.push_str(content);
+        while let Some(chunk_result) = stream.next().await {
+            let chunk = chunk_result?;
+            let text = String::from_utf8_lossy(&chunk);
+
+            // SSE data comes as "data: {...}\n\n" — may be split across chunks
+            line_buf.push_str(&text);
+
+            // Process all complete lines in the buffer
+            while let Some(newline_pos) = line_buf.find('\n') {
+                let line = line_buf[..newline_pos].trim().to_string();
+                line_buf = line_buf[newline_pos + 1..].to_string();
+
+                if line.is_empty() || line == "data: [DONE]" {
+                    continue;
                 }
 
-                // Check for usage in final chunk
-                if let Some(usage) = chunk.get("usage")
-                    && usage["prompt_tokens"].is_number()
+                if let Some(data) = line.strip_prefix("data: ")
+                    && let Ok(parsed) = serde_json::from_str::<serde_json::Value>(data)
                 {
-                    eprintln!(
-                        "\nTokens: {} input, {} output",
-                        usage["prompt_tokens"], usage["completion_tokens"]
-                    );
+                    if let Some(content) = parsed["choices"][0]["delta"]["content"].as_str() {
+                        write!(writer, "{}", content)?;
+                        writer.flush()?;
+                        total_content.push_str(content);
+                    }
+
+                    // Check for usage in final chunk
+                    if args.usage
+                        && let Some(usage) = parsed.get("usage")
+                        && usage["prompt_tokens"].is_number()
+                    {
+                        eprintln!(
+                            "\nTokens: {} input, {} output",
+                            usage["prompt_tokens"], usage["completion_tokens"]
+                        );
+                    }
                 }
             }
         }

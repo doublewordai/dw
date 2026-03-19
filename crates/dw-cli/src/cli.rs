@@ -421,6 +421,10 @@ pub struct RealtimeArgs {
     /// Write output to file instead of stdout.
     #[arg(long, short = 'o')]
     pub output_file: Option<PathBuf>,
+
+    /// Print token usage summary after completion.
+    #[arg(long)]
+    pub usage: bool,
 }
 
 // --- Webhooks ---

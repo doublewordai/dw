@@ -327,7 +327,7 @@ dw realtime Qwen3-30B "List 10 animals" -o animals.txt
 dw realtime Qwen3-30B "Hello" --no-stream
 ```
 
-Token usage is printed to stderr after completion, so stdout stays clean for piping.
+Add `--usage` to print token counts to stderr after completion. Off by default to keep output clean for piping.
 
 ### Webhooks
 
