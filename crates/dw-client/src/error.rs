@@ -66,11 +66,12 @@ pub enum DwError {
 impl DwError {
     /// Whether this error is transient and worth retrying.
     ///
-    /// Network errors, timeouts, rate limits, and 5xx server errors are transient.
-    /// Auth errors, 4xx client errors, and config errors are permanent.
+    /// Connection errors, timeouts, rate limits, and 5xx server errors are transient.
+    /// Auth errors, 4xx client errors, decode errors, and config errors are permanent.
     pub fn is_transient(&self) -> bool {
         match self {
-            DwError::Network(_) | DwError::RateLimited { .. } => true,
+            DwError::RateLimited { .. } => true,
+            DwError::Network(e) => e.is_timeout() || e.is_connect() || e.is_request(),
             DwError::Api { status, .. } => *status >= 500,
             _ => false,
         }
