@@ -69,6 +69,16 @@ pub struct Account {
     pub platform_key_id: Option<String>,
     #[serde(default)]
     pub org_id: Option<String>,
+    /// "personal" or "organization"
+    #[serde(default = "default_account_type")]
+    pub account_type: String,
+    /// Org display name (only for org accounts).
+    #[serde(default)]
+    pub org_name: Option<String>,
+}
+
+fn default_account_type() -> String {
+    "personal".to_string()
 }
 
 /// Get the DW config directory path.

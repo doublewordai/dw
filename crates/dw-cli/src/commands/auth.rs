@@ -49,6 +49,8 @@ async fn login_with_key(
         platform_key: None,
         platform_key_id: None,
         org_id: None,
+        account_type: "personal".to_string(),
+        org_name: None,
     };
 
     credentials.accounts.insert(account_name.clone(), account);
@@ -205,6 +207,11 @@ async fn login_browser(
             .as_str()
             .map(|s| s.to_string()),
         org_id: exchange_data["org_id"].as_str().map(|s| s.to_string()),
+        account_type: exchange_data["account_type"]
+            .as_str()
+            .unwrap_or("personal")
+            .to_string(),
+        org_name: exchange_data["org_name"].as_str().map(|s| s.to_string()),
     };
 
     credentials.accounts.insert(account_name.clone(), account);

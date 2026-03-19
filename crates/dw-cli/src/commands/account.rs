@@ -11,11 +11,15 @@ pub fn list(config: &Config, credentials: &Credentials, _format: OutputFormat) {
 
     for (name, account) in &credentials.accounts {
         let marker = if name == active { " *" } else { "" };
-        let context = account
-            .org_id
-            .as_ref()
-            .map(|_| " (org)")
-            .unwrap_or(" (personal)");
+        let context = if account.account_type == "organization" {
+            if let Some(ref org_name) = account.org_name {
+                format!(" (org: {})", org_name)
+            } else {
+                " (org)".to_string()
+            }
+        } else {
+            " (personal)".to_string()
+        };
         println!("  {}{}{} — {}", name, context, marker, account.email);
     }
 }
@@ -53,10 +57,14 @@ pub fn current(config: &Config, credentials: &Credentials) {
     match config.active_account.as_deref() {
         Some(name) => {
             if let Some(account) = credentials.accounts.get(name) {
-                let context = if account.org_id.is_some() {
-                    "org"
+                let context = if account.account_type == "organization" {
+                    if let Some(ref org_name) = account.org_name {
+                        format!("org: {}", org_name)
+                    } else {
+                        "org".to_string()
+                    }
                 } else {
-                    "personal"
+                    "personal".to_string()
                 };
                 println!("{} ({}) — {}", name, context, account.email);
             } else {

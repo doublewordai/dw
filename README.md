@@ -11,8 +11,8 @@ Replaces curl commands and custom scripts with a single tool for managing files,
 ### Build from source
 
 ```bash
-git clone https://github.com/doublewordai/dw-cli.git
-cd dw-cli
+git clone https://github.com/doublewordai/dw.git
+cd dw
 cargo build
 alias dw="$(pwd)/target/debug/dw"
 ```
