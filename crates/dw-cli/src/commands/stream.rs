@@ -169,13 +169,16 @@ async fn stream_loop(
     const MAX_RETRIES: u32 = 3;
 
     loop {
-        // Fetch results page — retry on transient errors
+        // Fetch results page — retry only transient errors
         let page = match client
             .get_batch_results_page(batch_id, cursor, page_size, Some("completed"))
             .await
         {
-            Ok(p) => p,
-            Err(e) => {
+            Ok(p) => {
+                consecutive_errors = 0;
+                p
+            }
+            Err(e) if e.is_transient() => {
                 consecutive_errors += 1;
                 if consecutive_errors > MAX_RETRIES {
                     bar.abandon_with_message(format!("{} — connection lost", batch_id));
@@ -188,6 +191,10 @@ async fn stream_loop(
                 ));
                 tokio::time::sleep(Duration::from_secs(delay)).await;
                 continue;
+            }
+            Err(e) => {
+                bar.abandon_with_message(format!("{} — error", batch_id));
+                return Err(e.into());
             }
         };
 
@@ -199,13 +206,13 @@ async fn stream_loop(
             cursor = page.last_line;
         }
 
-        // Fetch batch status — retry on transient errors
+        // Fetch batch status — retry only transient errors
         let batch = match client.get_batch(batch_id).await {
             Ok(b) => {
                 consecutive_errors = 0;
                 b
             }
-            Err(e) => {
+            Err(e) if e.is_transient() => {
                 consecutive_errors += 1;
                 if consecutive_errors > MAX_RETRIES {
                     bar.abandon_with_message(format!("{} — connection lost", batch_id));
@@ -218,6 +225,10 @@ async fn stream_loop(
                 ));
                 tokio::time::sleep(Duration::from_secs(delay)).await;
                 continue;
+            }
+            Err(e) => {
+                bar.abandon_with_message(format!("{} — error", batch_id));
+                return Err(e.into());
             }
         };
         if let Some(rc) = &batch.request_counts {
