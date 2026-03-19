@@ -149,36 +149,62 @@ async fn login_browser(
         anyhow::bail!("CSRF state mismatch. Login aborted.");
     }
 
-    // Extract keys and user info
-    let inference_key = params
-        .get("inference_key")
-        .ok_or_else(|| anyhow::anyhow!("No realtime key in callback"))?;
-    let platform_key = params
-        .get("platform_key")
-        .ok_or_else(|| anyhow::anyhow!("No platform key in callback"))?;
+    // Extract the one-time code (no secrets in the redirect URL)
+    let code = params
+        .get("code")
+        .ok_or_else(|| anyhow::anyhow!("No authorization code in callback"))?;
 
-    let user_id = params.get("user_id").cloned().unwrap_or_default();
-    let email = params.get("email").cloned().unwrap_or_default();
-    let display_name = params
-        .get("display_name")
-        .cloned()
-        .unwrap_or_else(|| email.clone());
-    let account_name = params
-        .get("account_name")
-        .cloned()
-        .unwrap_or_else(|| "personal".to_string());
-    let org_id = params.get("org_id").cloned();
+    send_response(
+        &stream,
+        "Authentication successful! You can close this tab.",
+    )
+    .await?;
 
-    // Store account
+    // Exchange the code for API keys via POST (secrets stay in response body, not URLs)
+    eprintln!("Exchanging authorization code...");
+
+    let exchange_url = format!("{}/authentication/cli-exchange", admin_base);
+    let http_client = reqwest::Client::new();
+    let exchange_response = http_client
+        .post(&exchange_url)
+        .json(&serde_json::json!({ "code": code }))
+        .send()
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to exchange code: {}", e))?;
+
+    if !exchange_response.status().is_success() {
+        let status = exchange_response.status();
+        let body = exchange_response.text().await.unwrap_or_default();
+        anyhow::bail!("Code exchange failed ({}): {}", status, body);
+    }
+
+    let exchange_data: serde_json::Value = exchange_response.json().await?;
+
+    let account_name = exchange_data["account_name"]
+        .as_str()
+        .unwrap_or("personal")
+        .to_string();
+
     let account = Account {
-        display_name,
-        user_id,
-        email,
-        inference_key: Some(inference_key.clone()),
-        inference_key_id: params.get("inference_key_id").cloned(),
-        platform_key: Some(platform_key.clone()),
-        platform_key_id: params.get("platform_key_id").cloned(),
-        org_id,
+        display_name: exchange_data["display_name"]
+            .as_str()
+            .unwrap_or("")
+            .to_string(),
+        user_id: exchange_data["user_id"].as_str().unwrap_or("").to_string(),
+        email: exchange_data["email"].as_str().unwrap_or("").to_string(),
+        inference_key: exchange_data["inference_key"]
+            .as_str()
+            .map(|s| s.to_string()),
+        inference_key_id: exchange_data["inference_key_id"]
+            .as_str()
+            .map(|s| s.to_string()),
+        platform_key: exchange_data["platform_key"]
+            .as_str()
+            .map(|s| s.to_string()),
+        platform_key_id: exchange_data["platform_key_id"]
+            .as_str()
+            .map(|s| s.to_string()),
+        org_id: exchange_data["org_id"].as_str().map(|s| s.to_string()),
     };
 
     credentials.accounts.insert(account_name.clone(), account);
@@ -186,12 +212,6 @@ async fn login_browser(
 
     config::save_credentials(credentials)?;
     config::save_config(config)?;
-
-    send_response(
-        &stream,
-        "Authentication successful! You can close this tab.",
-    )
-    .await?;
 
     eprintln!(
         "Logged in as {}. Active account: {}",
