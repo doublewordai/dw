@@ -243,15 +243,13 @@ pub async fn prepare(args: &FilePrepareArgs) -> anyhow::Result<()> {
 
     if args.path.is_dir() {
         if args.output_file.is_some() {
-            anyhow::bail!("Cannot use --output-file with a directory. Files are modified in place.");
+            anyhow::bail!(
+                "Cannot use --output-file with a directory. Files are modified in place."
+            );
         }
         let mut entries: Vec<_> = std::fs::read_dir(&args.path)?
             .filter_map(|e| e.ok())
-            .filter(|e| {
-                e.path()
-                    .extension()
-                    .is_some_and(|ext| ext == "jsonl")
-            })
+            .filter(|e| e.path().extension().is_some_and(|ext| ext == "jsonl"))
             .collect();
         entries.sort_by_key(|e| e.file_name());
 
