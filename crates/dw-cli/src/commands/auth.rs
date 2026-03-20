@@ -170,10 +170,32 @@ async fn login_browser(
     )
     .await?;
 
-    let account_name = params
-        .get("account_name")
-        .cloned()
-        .unwrap_or_else(|| "personal".to_string());
+    // Derive account name from email (before @) or fall back to account_name from server.
+    // SSO usernames can be opaque IDs like "google-oauth2|123..." which aren't user-friendly.
+    let account_name = if let Some(email) = params.get("email") {
+        if let Some(prefix) = email.split('@').next() {
+            if params.get("account_type").map(|t| t.as_str()) == Some("organization") {
+                // For org accounts, use org_name or account_name from server
+                params
+                    .get("org_name")
+                    .or_else(|| params.get("account_name"))
+                    .cloned()
+                    .unwrap_or_else(|| prefix.to_string())
+            } else {
+                prefix.to_string()
+            }
+        } else {
+            params
+                .get("account_name")
+                .cloned()
+                .unwrap_or_else(|| "personal".to_string())
+        }
+    } else {
+        params
+            .get("account_name")
+            .cloned()
+            .unwrap_or_else(|| "personal".to_string())
+    };
 
     let account = Account {
         display_name: params.get("display_name").cloned().unwrap_or_default(),
@@ -288,9 +310,11 @@ fn parse_query_params(path: &str) -> std::collections::HashMap<String, String> {
     if let Some(query) = path.split('?').nth(1) {
         for pair in query.split('&') {
             if let Some((key, value)) = pair.split_once('=') {
+                // Replace + with space before URL-decoding (form-encoding convention)
+                let value = value.replace('+', " ");
                 params.insert(
                     urlencoding::decode(key).unwrap_or_default().into_owned(),
-                    urlencoding::decode(value).unwrap_or_default().into_owned(),
+                    urlencoding::decode(&value).unwrap_or_default().into_owned(),
                 );
             }
         }
