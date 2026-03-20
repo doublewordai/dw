@@ -4,60 +4,61 @@ A command-line tool for the [Doubleword](https://doubleword.ai) batch inference 
 
 Replaces curl commands and custom scripts with a single tool for managing files, running batches, and sending inference requests. Built for developers who interact with the API directly, scripts that automate batch workflows, and AI agents building data pipelines.
 
-## Install & Setup
+## Install
 
-> **Work in progress:** A one-line install script (`curl | sh`), Homebrew formula, pip package, and browser-based `dw login` are coming soon. For now, build from source and configure credentials manually.
+### curl (Linux, macOS)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/doublewordai/dw/main/install.sh | sh
+```
+
+### pip (macOS recommended — avoids Gatekeeper issues)
+
+```bash
+pip install dw-cli
+```
 
 ### Build from source
 
 ```bash
 git clone https://github.com/doublewordai/dw.git
 cd dw
-cargo build
-alias dw="$(pwd)/target/debug/dw"
+cargo build --release
+cp target/release/dw ~/.local/bin/   # or anywhere in your PATH
 ```
 
-### Configure credentials
+## Setup
 
-The browser login flow (`dw login`) is not yet available. Set up credentials manually with API keys from [app.doubleword.ai](https://app.doubleword.ai):
-
-- **Inference key** — for files, batches, streaming, real-time inference (create from Settings > API Keys)
-- **Platform key** — for models, webhooks, whoami (requires platform access)
+### Login (recommended)
 
 ```bash
-mkdir -p ~/.dw
-
-cat > ~/.dw/credentials.toml << 'EOF'
-[accounts.personal]
-display_name = "Your Name"
-user_id = "your-user-uuid"
-email = "you@example.com"
-inference_key = "sk-your-inference-key"
-platform_key = "sk-your-platform-key"
-EOF
-
-chmod 600 ~/.dw/credentials.toml
-
-cat > ~/.dw/config.toml << 'EOF'
-active_account = "personal"
-default_output = "table"
-EOF
+dw login
 ```
 
-If you only have an inference key, you can also use:
+Opens your browser for SSO authentication. On completion, the CLI stores an inference key and platform key locally — giving full access to every command.
+
+For org-scoped usage (shared billing, model access):
+
+```bash
+dw login --org acme-corp
+```
+
+### API key login (agents and CI)
+
+For AI agents, CI pipelines, and headless environments without a browser:
 
 ```bash
 dw login --api-key "sk-your-inference-key"
 ```
 
-This gives you files, batches, streaming, and real-time inference — but not models, webhooks, or whoami.
+Create an inference key from [app.doubleword.ai](https://app.doubleword.ai) > Settings > API Keys. This gives access to files, batches, streaming, and real-time inference. Platform operations (models, webhooks, whoami) require the full `dw login` flow.
 
 ### Verify
 
 ```bash
 dw config show         # Check server URLs and active account
-dw files list          # Should return your files (inference key)
-dw models list         # Should return models (platform key)
+dw whoami              # Show current user
+dw models list         # List available models
 ```
 
 ### Point at a different server
@@ -66,54 +67,28 @@ dw models list         # Should return models (platform key)
 # Self-hosted deployment (single domain)
 dw config set-url https://your-server.example.com
 
-# Production defaults (two domains)
-dw config set-ai-url https://api.doubleword.ai
-dw config set-admin-url https://app.doubleword.ai
+# Set individually
+dw config set-ai-url https://api.mycompany.com
+dw config set-admin-url https://app.mycompany.com
 ```
 
 ## Quick Start
 
 ```bash
-# Run a batch from a JSONL file and stream results to stdout
-dw stream batch.jsonl
+# Authenticate
+dw login
 
 # See what models are available
 dw models list
 
-# Send a one-shot prompt
+# Send a one-shot prompt with streaming output
 dw realtime Qwen3-30B "What is the capital of France?"
+
+# Run a batch from a JSONL file and stream results to stdout
+dw stream batch.jsonl > results.jsonl
 ```
 
-## Authentication (coming soon)
-
-> The browser login flow described below is planned but not yet implemented. See [Install & Setup](#install--setup) above for the current manual approach.
-
-### `dw login`
-
-The primary way to authenticate. Will open your browser for SSO, then store credentials locally. This gives full access to every command — files, batches, models, webhooks, account management, everything.
-
-```bash
-dw login                  # Login to your personal account
-dw login --org acme-corp  # Login within an org context
-```
-
-```bash
-dw whoami          # Show current user, roles, credit balance
-dw logout          # Remove stored credentials
-dw logout --all    # Remove all accounts
-```
-
-### API key login (agents and CI)
-
-For AI agents, CI pipelines, and headless environments that don't have a browser, you can authenticate with an inference API key from the dashboard:
-
-```bash
-dw login --api-key "sk-your-key"
-```
-
-This is intentionally scoped to inference operations — the agent gets access to files, batches, streaming, and real-time inference, which is everything it needs to run workloads on your behalf. Platform operations like browsing models, managing webhooks, or viewing account info require the full `dw login` flow.
-
-A typical setup: you (the developer) run `dw login` to set up your account and browse models. Then you create an inference API key from the dashboard and hand it to your agent or CI pipeline with `dw login --api-key`.
+## Authentication
 
 ### Access by auth method
 
@@ -129,6 +104,8 @@ A typical setup: you (the developer) run `dw login` to set up your account and b
 | `dw models list / get` | Yes | — |
 | `dw whoami` | Yes | — |
 | `dw webhooks *` | Yes | — |
+
+A typical setup: you (the developer) run `dw login` to set up your account and browse models. Then you create an inference API key from the dashboard and hand it to your agent or CI pipeline with `dw login --api-key`.
 
 ## Configuration
 
@@ -171,7 +148,13 @@ dw account switch acme    # Switch to org account
 dw --account personal batches list   # Override per-command
 ```
 
-When you log in within an org context, resources are billed to the org with per-member attribution.
+```bash
+dw whoami          # Show current user and roles
+dw logout          # Remove active account credentials
+dw logout --all    # Remove all accounts
+```
+
+When you log in within an org context (`dw login --org acme-corp`), resources are billed to the org with per-member attribution.
 
 ## Output Formats
 
