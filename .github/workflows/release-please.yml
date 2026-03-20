@@ -86,13 +86,12 @@ jobs:
         with:
           path: artifacts/
 
-      - name: Generate checksums
+      - name: Flatten artifacts and generate checksums
         run: |
-          cd artifacts
-          for dir in */; do
-            mv "$dir"/* .
-            rmdir "$dir"
-          done
+          mkdir -p release
+          find artifacts -type f -name 'dw-*' -exec cp {} release/ \;
+          ls -la release/
+          cd release
           sha256sum dw-* > checksums.txt
           cat checksums.txt
 
@@ -101,8 +100,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release upload ${{ needs.release-please.outputs.tag_name }} \
-            artifacts/dw-* \
-            artifacts/checksums.txt \
+            release/dw-* \
+            release/checksums.txt \
             --repo ${{ github.repository }}
 
   publish-python:
