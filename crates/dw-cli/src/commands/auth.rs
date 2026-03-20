@@ -115,15 +115,14 @@ async fn login_browser(
         urlencoding::encode(&callback_url)
     );
 
-    eprintln!("Authenticate in your browser to continue.");
-    eprintln!();
-    eprintln!("  {}", auth_url);
-    eprintln!();
-    eprint!("Press Enter to open browser (or visit the URL above manually)...");
-    let _ = std::io::stdin().read_line(&mut String::new());
+    eprintln!("Opening browser for authentication...");
 
     if open::that(&auth_url).is_err() {
-        eprintln!("Could not open browser. Please visit the URL above manually.");
+        eprintln!("Could not open browser automatically.");
+        eprintln!("Please open this URL in your browser:");
+        eprintln!();
+        eprintln!("  {}", auth_url);
+        eprintln!();
     }
 
     // Wait for callback

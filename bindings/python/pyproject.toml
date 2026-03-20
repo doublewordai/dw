@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68.0"]
+requires = ["setuptools>=68.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -25,3 +25,7 @@ dw = "dw_cli:main"
 [project.urls]
 Homepage = "https://doubleword.ai"
 Repository = "https://github.com/doublewordai/dw"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["dw_cli*"]

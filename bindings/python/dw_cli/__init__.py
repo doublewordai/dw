@@ -84,7 +84,7 @@ def _get_installed_version(binary_path):
 
 def _verify_checksum(binary_path, version, suffix):
     # type: (Path, str, str) -> None
-    """Download checksums.txt and verify the binary's SHA256."""
+    """Download checksums.txt and verify the binary's SHA256. Fails hard — will not run unverified binaries."""
     import hashlib
 
     checksum_url = "https://github.com/{}/releases/download/v{}/checksums.txt".format(REPO, version)
@@ -92,9 +92,14 @@ def _verify_checksum(binary_path, version, suffix):
         req = urllib.request.Request(checksum_url)
         with urllib.request.urlopen(req, timeout=15) as resp:
             checksums = resp.read().decode()
-    except (urllib.error.URLError, urllib.error.HTTPError):
-        print("Warning: Could not download checksums, skipping verification", file=sys.stderr)
-        return
+    except (urllib.error.URLError, urllib.error.HTTPError) as e:
+        binary_path.unlink(missing_ok=True)
+        print(
+            "Error: Could not download checksums for verification ({})\n"
+            "Install manually: https://github.com/doublewordai/dw/releases".format(e),
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
     artifact_name = "dw-{}".format(suffix)
     expected = None
@@ -105,8 +110,13 @@ def _verify_checksum(binary_path, version, suffix):
             break
 
     if expected is None:
-        print("Warning: No checksum found for {}, skipping verification".format(artifact_name), file=sys.stderr)
-        return
+        binary_path.unlink(missing_ok=True)
+        print(
+            "Error: No checksum entry found for {} in checksums.txt\n"
+            "Install manually: https://github.com/doublewordai/dw/releases".format(artifact_name),
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
     sha256 = hashlib.sha256()
     with open(binary_path, "rb") as f:
