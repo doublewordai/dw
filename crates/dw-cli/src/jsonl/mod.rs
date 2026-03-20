@@ -102,12 +102,6 @@ pub async fn transform_file(
     let content = std::fs::read_to_string(input)?;
     let transformed = apply_transforms(&content, transforms).await?;
 
-    // If writing in-place, create a backup first
-    if input == output {
-        let backup = input.with_extension("jsonl.bak");
-        std::fs::copy(input, &backup)?;
-    }
-
     std::fs::write(output, transformed)?;
     Ok(())
 }
