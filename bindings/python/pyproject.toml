@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "dw-cli"
-version = "0.1.0"
+version = "0.1.1"
 description = "Doubleword Batch Inference CLI"
 readme = "README.md"
 requires-python = ">=3.10"
