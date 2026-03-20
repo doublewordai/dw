@@ -10,17 +10,17 @@ pub fn list(config: &Config, credentials: &Credentials, _format: OutputFormat) {
     let active = config.active_account.as_deref().unwrap_or("");
 
     for (name, account) in &credentials.accounts {
-        let marker = if name == active { " *" } else { "" };
+        let marker = if name == active { "* " } else { "  " };
         let context = if account.account_type == "organization" {
             if let Some(ref org_name) = account.org_name {
-                format!(" (org: {})", org_name)
+                format!("(org: {})", org_name)
             } else {
-                " (org)".to_string()
+                "(org)".to_string()
             }
         } else {
-            " (personal)".to_string()
+            "(personal)".to_string()
         };
-        println!("  {}{}{} — {}", name, context, marker, account.email);
+        println!("{}{} {} — {}", marker, name, context, account.email);
     }
 }
 
