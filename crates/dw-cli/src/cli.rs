@@ -247,7 +247,7 @@ pub struct FileUploadArgs {
 
 #[derive(clap::Args)]
 pub struct FilePrepareArgs {
-    /// Path to JSONL file.
+    /// Path to JSONL file or directory of .jsonl files.
     pub path: PathBuf,
 
     /// Override the model on every line.

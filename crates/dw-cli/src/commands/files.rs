@@ -241,9 +241,33 @@ pub async fn prepare(args: &FilePrepareArgs) -> anyhow::Result<()> {
         encode_images: args.encode_images,
     };
 
-    let output_path = args.output_file.as_deref().unwrap_or(&args.path);
-    jsonl::transform_file(&args.path, output_path, &transforms).await?;
+    if args.path.is_dir() {
+        if args.output_file.is_some() {
+            anyhow::bail!("Cannot use --output-file with a directory. Files are modified in place.");
+        }
+        let mut entries: Vec<_> = std::fs::read_dir(&args.path)?
+            .filter_map(|e| e.ok())
+            .filter(|e| {
+                e.path()
+                    .extension()
+                    .is_some_and(|ext| ext == "jsonl")
+            })
+            .collect();
+        entries.sort_by_key(|e| e.file_name());
 
-    eprintln!("Prepared: {}", output_path.display());
+        if entries.is_empty() {
+            anyhow::bail!("No .jsonl files found in {}", args.path.display());
+        }
+
+        for entry in &entries {
+            let path = entry.path();
+            jsonl::transform_file(&path, &path, &transforms).await?;
+            eprintln!("  Prepared: {}", path.display());
+        }
+    } else {
+        let output_path = args.output_file.as_deref().unwrap_or(&args.path);
+        jsonl::transform_file(&args.path, output_path, &transforms).await?;
+        eprintln!("Prepared: {}", output_path.display());
+    }
     Ok(())
 }
