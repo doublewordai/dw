@@ -104,3 +104,35 @@ jobs:
             artifacts/dw-* \
             artifacts/checksums.txt \
             --repo ${{ github.repository }}
+
+  publish-python:
+    name: Publish Python Package
+    needs: [release-please, publish-release]
+    if: ${{ needs.release-please.outputs.release_created }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Update version in pyproject.toml
+        run: |
+          VERSION=${{ needs.release-please.outputs.tag_name }}
+          VERSION=${VERSION#v}
+          sed -i "s/^version = .*/version = \"${VERSION}\"/" bindings/python/pyproject.toml
+
+      - name: Build package
+        run: |
+          pip install build
+          cd bindings/python
+          python -m build
+
+      - name: Publish to PyPI
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
+        run: |
+          pip install twine
+          twine upload bindings/python/dist/*

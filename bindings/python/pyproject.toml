@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dw-cli"
+version = "0.1.0"
+description = "Doubleword Batch Inference CLI"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "MIT"}
+authors = [
+    {name = "Doubleword", email = "engineering@doubleword.ai"},
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Build Tools",
+    "Programming Language :: Python :: 3",
+]
+
+[project.scripts]
+dw = "dw_cli:main"
+
+[project.urls]
+Homepage = "https://doubleword.ai"
+Repository = "https://github.com/doublewordai/dw"

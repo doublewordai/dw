@@ -1,0 +1,2 @@
+[console_scripts]
+dw = dw_cli:main
