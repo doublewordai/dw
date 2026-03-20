@@ -127,6 +127,7 @@ jobs:
         run: |
           pip install build
           cd bindings/python
+          rm -rf dist/ build/ *.egg-info/
           python -m build
 
       - name: Publish to PyPI

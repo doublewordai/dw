@@ -5,3 +5,9 @@
 results-*.jsonl
 eval.jsonl
 specs/
+
+# Python build artifacts
+bindings/python/dist/
+bindings/python/build/
+bindings/python/*.egg-info/
+**/__pycache__/
