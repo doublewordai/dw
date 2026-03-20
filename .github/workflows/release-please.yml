@@ -117,12 +117,6 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Update version in pyproject.toml
-        run: |
-          VERSION=${{ needs.release-please.outputs.tag_name }}
-          VERSION=${VERSION#v}
-          sed -i "s/^version = .*/version = \"${VERSION}\"/" bindings/python/pyproject.toml
-
       - name: Build package
         run: |
           pip install build

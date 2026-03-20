@@ -184,13 +184,14 @@ def _ensure_binary():
         if should_check:
             try:
                 latest = _get_latest_version()
-                marker.touch()
                 if latest != installed:
                     print(
                         "Updating dw: {} -> {}".format(installed, latest),
                         file=sys.stderr,
                     )
                     _download_binary(latest)
+                # Only mark check complete after success (version check or download)
+                marker.touch()
             except (urllib.error.URLError, urllib.error.HTTPError) as e:
                 print(
                     "Warning: Update check failed ({}), using existing binary".format(e),
