@@ -223,8 +223,25 @@ async fn login_browser(
         org_name: params.get("org_name").cloned(),
     };
 
-    credentials.accounts.insert(account_name.clone(), account);
-    config.active_account = Some(account_name.clone());
+    // Deduplicate account name if it collides with an existing account
+    let mut final_name = account_name.clone();
+    if credentials.accounts.contains_key(&final_name) {
+        // Only deduplicate if it's a genuinely different account (different user_id)
+        let existing = &credentials.accounts[&final_name];
+        if existing.user_id != account.user_id {
+            let mut suffix = 2;
+            loop {
+                let candidate = format!("{}-{}", account_name, suffix);
+                if !credentials.accounts.contains_key(&candidate) {
+                    final_name = candidate;
+                    break;
+                }
+                suffix += 1;
+            }
+        }
+    }
+    credentials.accounts.insert(final_name.clone(), account);
+    config.active_account = Some(final_name.clone());
 
     config::save_credentials(credentials)?;
     config::save_config(config)?;
