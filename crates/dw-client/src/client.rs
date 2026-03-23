@@ -16,6 +16,9 @@ pub enum ApiSurface {
 }
 
 /// Configuration for the Doubleword API client.
+///
+/// Use `..Default::default()` when constructing to allow future field additions.
+/// TODO: Add `#[non_exhaustive]` when publishing this crate externally.
 #[derive(Debug, Clone)]
 pub struct DwClientConfig {
     pub ai_base_url: String,
@@ -165,7 +168,7 @@ impl DwClient {
     }
 
     /// Send a request and parse the JSON response, handling errors.
-    /// Automatically retries once on 429 (rate limited) after the specified delay.
+    /// Retries on transient errors (429, 5xx, network) up to `config.max_retries` times.
     pub async fn send<T: serde::de::DeserializeOwned>(
         &self,
         request: reqwest::RequestBuilder,
@@ -175,7 +178,7 @@ impl DwClient {
     }
 
     /// Send a request and return raw bytes (for file content downloads).
-    /// Automatically retries once on 429.
+    /// Retries on transient errors (429, 5xx, network) up to `config.max_retries` times.
     pub async fn send_bytes(
         &self,
         request: reqwest::RequestBuilder,
@@ -185,7 +188,7 @@ impl DwClient {
     }
 
     /// Send a request expecting no response body (204, etc).
-    /// Automatically retries once on 429.
+    /// Retries on transient errors (429, 5xx, network) up to `config.max_retries` times.
     pub async fn send_empty(&self, request: reqwest::RequestBuilder) -> Result<(), DwError> {
         self.send_with_retry(request).await?;
         Ok(())
@@ -228,6 +231,11 @@ impl DwClient {
     /// disable retries. On 429, extracts retry delay from `Retry-After` header
     /// or `retry_after_seconds` in the JSON body. On 5xx/network errors, uses
     /// exponential backoff (2s, 4s, 8s... capped at 60s).
+    ///
+    /// Note: retries apply to all HTTP methods including POST. For non-idempotent
+    /// requests (create batch, upload file), `try_clone()` naturally fails for
+    /// streamed bodies, preventing retry of large uploads. Small JSON POSTs may
+    /// be retried; the server returns 409 on duplicates.
     async fn send_with_retry(
         &self,
         request: reqwest::RequestBuilder,
@@ -236,11 +244,12 @@ impl DwClient {
         let max_retries = self.config.max_retries.min(10);
 
         // Clone requests up front for potential retries
-        let mut clones: Vec<reqwest::RequestBuilder> = Vec::new();
+        let mut clones: std::collections::VecDeque<reqwest::RequestBuilder> =
+            std::collections::VecDeque::with_capacity(max_retries as usize);
         let mut current = request;
         for _ in 0..max_retries {
             if let Some(clone) = current.try_clone() {
-                clones.push(clone);
+                clones.push_back(clone);
             }
         }
 
@@ -256,7 +265,7 @@ impl DwClient {
                         let delay = Self::backoff_delay(attempt);
                         tracing::warn!(attempt, ?delay, "Network error, retrying: {}", e);
                         tokio::time::sleep(delay).await;
-                        current = clones.remove(0);
+                        current = clones.pop_front().unwrap();
                         attempt += 1;
                         continue;
                     }
@@ -269,7 +278,7 @@ impl DwClient {
                 if can_retry {
                     tracing::warn!(attempt, retry_after, "Rate limited (429), retrying");
                     tokio::time::sleep(Duration::from_secs(retry_after)).await;
-                    current = clones.remove(0);
+                    current = clones.pop_front().unwrap();
                     attempt += 1;
                     continue;
                 }
@@ -289,7 +298,7 @@ impl DwClient {
                 );
                 let _ = response.bytes().await;
                 tokio::time::sleep(delay).await;
-                current = clones.remove(0);
+                current = clones.pop_front().unwrap();
                 attempt += 1;
                 continue;
             }

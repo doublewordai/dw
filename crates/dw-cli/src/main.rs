@@ -203,10 +203,12 @@ async fn run() -> anyhow::Result<()> {
                         commands::batches::results(&client, &id, output_file.as_deref()).await
                     }
                     BatchCommands::Run(args) => {
-                        commands::batches::run(&client, &args, format, poll_interval).await
+                        commands::batches::run(&client, &args, format, poll_interval, max_retries)
+                            .await
                     }
                     BatchCommands::Watch { ids } => {
-                        commands::batches::watch_batches(&client, &ids, poll_interval).await
+                        commands::batches::watch_batches(&client, &ids, poll_interval, max_retries)
+                            .await
                     }
                 },
 
