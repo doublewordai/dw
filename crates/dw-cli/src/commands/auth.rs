@@ -12,7 +12,13 @@ pub async fn login(
         login_with_key(api_key, credentials, config).await
     } else {
         // Browser login flow
-        login_browser(args.org.as_deref(), credentials, config).await
+        login_browser(
+            args.org.as_deref(),
+            args.r#as.as_deref(),
+            credentials,
+            config,
+        )
+        .await
     }
 }
 
@@ -69,6 +75,7 @@ async fn login_with_key(
 /// Browser-based login flow.
 async fn login_browser(
     org: Option<&str>,
+    custom_name: Option<&str>,
     credentials: &mut Credentials,
     config: &mut Config,
 ) -> anyhow::Result<()> {
@@ -169,35 +176,43 @@ async fn login_browser(
     )
     .await?;
 
-    // Derive account name from email (before @) or fall back to account_name from server.
-    // SSO usernames can be opaque IDs like "google-oauth2|123..." which aren't user-friendly.
-    let account_name = if let Some(email) = params.get("email") {
-        if let Some(prefix) = email.split('@').next() {
-            if params.get("account_type").map(|t| t.as_str()) == Some("organization") {
-                // For org accounts, use org_name or account_name from server
-                params
-                    .get("org_name")
-                    .or_else(|| params.get("account_name"))
-                    .cloned()
-                    .unwrap_or_else(|| prefix.to_string())
-            } else {
-                prefix.to_string()
-            }
-        } else {
-            params
-                .get("account_name")
-                .cloned()
-                .unwrap_or_else(|| "personal".to_string())
-        }
+    // Derive display name: org name for org accounts, personal display name otherwise.
+    // Falls back through: display_name → email prefix → "default"
+    let is_org = params.get("account_type").map(|s| s.as_str()) == Some("organization");
+    let display_name = if is_org {
+        params
+            .get("org_name")
+            .filter(|s| !s.is_empty())
+            .or_else(|| params.get("display_name").filter(|s| !s.is_empty()))
+            .cloned()
+            .unwrap_or_else(|| "default".to_string())
     } else {
         params
-            .get("account_name")
+            .get("display_name")
+            .filter(|s| !s.is_empty())
             .cloned()
-            .unwrap_or_else(|| "personal".to_string())
+            .or_else(|| {
+                params
+                    .get("email")
+                    .and_then(|e| e.split('@').next().map(|s| s.to_string()))
+                    .filter(|s| !s.is_empty())
+            })
+            .unwrap_or_else(|| "default".to_string())
+    };
+
+    // Account key defaults to display/org name, overridable via --as
+    let account_name = if let Some(name) = custom_name {
+        let trimmed = name.trim();
+        if trimmed.is_empty() {
+            anyhow::bail!("--as name cannot be empty.");
+        }
+        trimmed.to_string()
+    } else {
+        display_name.clone()
     };
 
     let account = Account {
-        display_name: params.get("display_name").cloned().unwrap_or_default(),
+        display_name,
         user_id: params.get("user_id").cloned().unwrap_or_default(),
         email: params.get("email").cloned().unwrap_or_default(),
         inference_key: Some(inference_key.clone()),
@@ -212,15 +227,41 @@ async fn login_browser(
         org_name: params.get("org_name").cloned(),
     };
 
-    credentials.accounts.insert(account_name.clone(), account);
-    config.active_account = Some(account_name.clone());
+    // Deduplicate account name if it collides with a different context (case-insensitive)
+    let mut final_name = account_name.clone();
+    let existing_match = credentials
+        .accounts
+        .iter()
+        .find(|(k, _)| k.eq_ignore_ascii_case(&final_name));
+    if let Some((existing_key, existing_account)) = existing_match {
+        if !config::is_same_context(existing_account, &account) {
+            let mut suffix = 2;
+            loop {
+                let candidate = format!("{}-{}", account_name, suffix);
+                if !credentials
+                    .accounts
+                    .keys()
+                    .any(|k| k.eq_ignore_ascii_case(&candidate))
+                {
+                    final_name = candidate;
+                    break;
+                }
+                suffix += 1;
+            }
+        } else {
+            // Same context — overwrite with the exact existing key to preserve casing
+            final_name = existing_key.clone();
+        }
+    }
+    credentials.accounts.insert(final_name.clone(), account);
+    config.active_account = Some(final_name.clone());
 
     config::save_credentials(credentials)?;
     config::save_config(config)?;
 
     eprintln!(
         "Logged in as {}. Active account: {}",
-        credentials.accounts[&account_name].display_name, account_name
+        credentials.accounts[&final_name].display_name, final_name
     );
 
     Ok(())

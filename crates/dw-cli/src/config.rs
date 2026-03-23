@@ -81,6 +81,28 @@ fn default_account_type() -> String {
     "personal".to_string()
 }
 
+impl Account {
+    /// Human-readable display name for this account.
+    /// Priority: display_name → email prefix → provided key.
+    /// May return empty only if all three sources are empty (malformed credentials).
+    pub fn effective_display<'a>(&'a self, key: &'a str) -> &'a str {
+        if !self.display_name.is_empty() {
+            return &self.display_name;
+        }
+        // email.split('@').next() returns a slice of self.email — valid for 'a
+        let prefix = self.email.split('@').next().unwrap_or("");
+        if !prefix.is_empty() {
+            return prefix;
+        }
+        key
+    }
+}
+
+/// Check if an account is the same context (same user_id, same account type, same org).
+pub fn is_same_context(a: &Account, b: &Account) -> bool {
+    a.user_id == b.user_id && a.account_type == b.account_type && a.org_id == b.org_id
+}
+
 /// Get the DW config directory path.
 pub fn config_dir() -> PathBuf {
     dirs::home_dir()
@@ -146,11 +168,24 @@ pub fn resolve_account<'a>(
             "No active account. Run `dw login` to authenticate or `dw account switch <name>` to select an account.".to_string()
         })?;
 
-    // Find in credentials (case-insensitive key lookup)
+    // Find in credentials: try key match first, then display name match
     let (key, account) = credentials
         .accounts
         .iter()
         .find(|(k, _)| k.eq_ignore_ascii_case(account_name))
+        .or_else(|| {
+            let mut matches = credentials
+                .accounts
+                .iter()
+                .filter(|(k, a)| a.effective_display(k).eq_ignore_ascii_case(account_name));
+            let first = matches.next()?;
+            // Ambiguous: multiple display name matches — return None to fall through to error
+            if matches.next().is_some() {
+                None
+            } else {
+                Some(first)
+            }
+        })
         .ok_or_else(|| {
             format!(
                 "Account '{}' not found. Run `dw account list` to see available accounts.",

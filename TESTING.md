@@ -410,11 +410,25 @@ dw files list
 # Current account
 dw account current
 
-# List all
+# List all (shows * for active, switch hint at bottom)
 dw account list
+
+# Switch between accounts
+dw account switch "Hamish Main"
+dw account switch Doubleword
+
+# Rename an account for convenience
+dw account rename "Hamish Main" personal
+dw account switch personal
+
+# Remove a stored account
+dw account remove old-account
 
 # The --account flag should override active account (will error if doesn't exist)
 dw files list --account nonexistent
+
+# Login with custom account name
+dw login --org acme-corp --as prod
 ```
 
 ## 16. Error Handling

@@ -37,7 +37,7 @@ The `DwClient` handles routing to the correct surface automatically.
 - **Browser login** (`dw login`): Opens browser → SSO → server creates two external API keys (inference + platform) → redirects to CLI's localhost server with keys
 - **Headless login** (`dw login --api-key`): Stores an inference key directly (limited functionality)
 - **Credentials**: Stored in `~/.dw/credentials.toml` (0600 permissions)
-- **Accounts**: kubectl-style contexts. `dw account switch` changes which key pair is active.
+- **Accounts**: kubectl-style contexts. Account key = display name (what you see is what you type). `dw account switch`, `dw account rename`, `dw account remove` manage them. `--as` flag on login overrides the auto-generated name.
 
 External keys != hidden keys. External keys authenticate and scope paths. Hidden keys are static internal keys for billing attribution — managed automatically by the server.
 

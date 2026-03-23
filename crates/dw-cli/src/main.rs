@@ -98,6 +98,12 @@ async fn run() -> anyhow::Result<()> {
                 commands::account::current(&config, &credentials);
                 Ok(())
             }
+            AccountCommands::Rename { current, new } => {
+                commands::account::rename(&current, &new, &mut config, &mut credentials)
+            }
+            AccountCommands::Remove { name } => {
+                commands::account::remove(&name, &mut config, &mut credentials)
+            }
         },
 
         // --- Commands requiring authentication ---
