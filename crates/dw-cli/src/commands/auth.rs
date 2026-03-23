@@ -182,7 +182,8 @@ async fn login_browser(
     let display_name = if is_org {
         params
             .get("org_name")
-            .or_else(|| params.get("display_name"))
+            .filter(|s| !s.is_empty())
+            .or_else(|| params.get("display_name").filter(|s| !s.is_empty()))
             .cloned()
             .unwrap_or_else(|| "default".to_string())
     } else {

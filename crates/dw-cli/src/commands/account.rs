@@ -12,8 +12,9 @@ fn validate_name(name: &str) -> anyhow::Result<String> {
 
 /// Quote a name for display in shell command suggestions.
 fn shell_quote(name: &str) -> String {
-    if name.contains(' ') {
-        format!("\"{}\"", name)
+    if name.contains(' ') || name.contains('"') || name.contains('\\') || name.contains('\'') {
+        // Use single quotes and escape any embedded single quotes
+        format!("'{}'", name.replace('\'', "'\\''"))
     } else {
         name.to_string()
     }
@@ -101,11 +102,11 @@ pub fn rename(
     let new = validate_name(new)?;
     let key = resolve_name(current, credentials)?;
 
-    // Case-insensitive uniqueness check
+    // Case-insensitive uniqueness check (allow case-only rename of the same account)
     if credentials
         .accounts
         .keys()
-        .any(|k| k.eq_ignore_ascii_case(&new))
+        .any(|k| k.eq_ignore_ascii_case(&new) && !k.eq_ignore_ascii_case(&key))
     {
         anyhow::bail!("Account '{}' already exists.", new);
     }
