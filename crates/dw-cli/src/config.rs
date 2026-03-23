@@ -82,20 +82,17 @@ fn default_account_type() -> String {
 }
 
 impl Account {
-    /// Human-readable display name, guaranteed non-empty.
-    /// Falls back to email prefix, then the provided key.
+    /// Human-readable display name, never empty.
+    /// Priority: display_name → email prefix → provided key.
+    /// All return values borrow from either `self` or `key`.
     pub fn effective_display<'a>(&'a self, key: &'a str) -> &'a str {
         if !self.display_name.is_empty() {
             return &self.display_name;
         }
-        // Fall back to email prefix
+        // email.split('@').next() returns a slice of self.email — valid for 'a
         let prefix = self.email.split('@').next().unwrap_or("");
         if !prefix.is_empty() {
-            // Can't return a slice of a computed value, so fall back to key
-            // when display_name is empty but email has a prefix, we use key
-            // since we can't return a borrow of a substring of email here
-            // (it would work, email is &'a str via self)
-            return self.email.split('@').next().unwrap_or(key);
+            return prefix;
         }
         key
     }
@@ -177,15 +174,16 @@ pub fn resolve_account<'a>(
         .iter()
         .find(|(k, _)| k.eq_ignore_ascii_case(account_name))
         .or_else(|| {
-            let matches: Vec<_> = credentials
+            let mut matches = credentials
                 .accounts
                 .iter()
-                .filter(|(k, a)| a.effective_display(k).eq_ignore_ascii_case(account_name))
-                .collect();
-            if matches.len() == 1 {
-                Some(matches[0])
-            } else {
+                .filter(|(k, a)| a.effective_display(k).eq_ignore_ascii_case(account_name));
+            let first = matches.next()?;
+            // Ambiguous: multiple display name matches — return None to fall through to error
+            if matches.next().is_some() {
                 None
+            } else {
+                Some(first)
             }
         })
         .ok_or_else(|| {

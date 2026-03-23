@@ -200,9 +200,15 @@ async fn login_browser(
     };
 
     // Account key = custom name (--as) or display name (what you see is what you type)
-    let account_name = custom_name
-        .map(|s| s.to_string())
-        .unwrap_or_else(|| display_name.clone());
+    let account_name = if let Some(name) = custom_name {
+        let trimmed = name.trim();
+        if trimmed.is_empty() {
+            anyhow::bail!("--as name cannot be empty.");
+        }
+        trimmed.to_string()
+    } else {
+        display_name.clone()
+    };
 
     let account = Account {
         display_name,
