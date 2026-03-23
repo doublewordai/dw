@@ -139,20 +139,20 @@ dw --server-ai https://custom-api.com batches list
 
 ### Accounts
 
-Multiple accounts (personal + organizations) work like kubectl contexts. Each account stores its own API keys and is named automatically from your display name (personal) or org name (organization).
+Multiple accounts (personal + organizations) work like kubectl contexts. Each login creates a named account — auto-named from your display name (personal) or org name (organization). The name is what you see and what you type.
 
 ```bash
 dw account list              # Show all stored accounts (* = active)
 dw account current           # Show active account
 dw account switch Doubleword # Switch to an org account
-dw account switch "Hamish"   # Switch to personal
+dw account switch "Hamish Main"  # Switch to personal
 ```
 
 Custom names at login or rename after:
 
 ```bash
-dw login --org acme-corp --as prod     # Store as "prod" instead of "Acme Corp"
-dw account rename "Hamish" personal    # Rename for convenience
+dw login --org acme-corp --as prod     # Store as "prod" instead of auto-name
+dw account rename "Hamish Main" personal   # Rename for convenience
 dw account remove old-account          # Delete stored credentials
 ```
 
