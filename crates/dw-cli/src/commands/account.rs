@@ -90,6 +90,80 @@ pub fn switch(name: &str, config: &mut Config, credentials: &Credentials) -> any
     }
 }
 
+pub fn rename(
+    current: &str,
+    new: &str,
+    config: &mut Config,
+    credentials: &mut Credentials,
+) -> anyhow::Result<()> {
+    // Find the account by key or display name
+    let found_key = credentials
+        .accounts
+        .keys()
+        .find(|k| k.eq_ignore_ascii_case(current))
+        .cloned()
+        .or_else(|| {
+            credentials
+                .accounts
+                .iter()
+                .find(|(k, a)| a.effective_display(k).eq_ignore_ascii_case(current))
+                .map(|(k, _)| k.clone())
+        });
+
+    let key = found_key
+        .ok_or_else(|| anyhow::anyhow!("Account '{}' not found.", current))?;
+
+    if credentials.accounts.contains_key(new) {
+        anyhow::bail!("Account '{}' already exists.", new);
+    }
+
+    let account = credentials.accounts.remove(&key).unwrap();
+    credentials.accounts.insert(new.to_string(), account);
+
+    // Update active account if it was the renamed one
+    if config.active_account.as_deref() == Some(&key) {
+        config.active_account = Some(new.to_string());
+    }
+
+    config::save_credentials(credentials)?;
+    config::save_config(config)?;
+    eprintln!("Renamed '{}' → '{}'", key, new);
+    Ok(())
+}
+
+pub fn remove(
+    name: &str,
+    config: &mut Config,
+    credentials: &mut Credentials,
+) -> anyhow::Result<()> {
+    let found_key = credentials
+        .accounts
+        .keys()
+        .find(|k| k.eq_ignore_ascii_case(name))
+        .cloned()
+        .or_else(|| {
+            credentials
+                .accounts
+                .iter()
+                .find(|(k, a)| a.effective_display(k).eq_ignore_ascii_case(name))
+                .map(|(k, _)| k.clone())
+        });
+
+    let key = found_key
+        .ok_or_else(|| anyhow::anyhow!("Account '{}' not found.", name))?;
+
+    credentials.accounts.remove(&key);
+
+    if config.active_account.as_deref() == Some(key.as_str()) {
+        config.active_account = credentials.accounts.keys().next().cloned();
+    }
+
+    config::save_credentials(credentials)?;
+    config::save_config(config)?;
+    eprintln!("Removed account: {}", key);
+    Ok(())
+}
+
 pub fn current(config: &Config, credentials: &Credentials) {
     match config.active_account.as_deref() {
         Some(name) => {

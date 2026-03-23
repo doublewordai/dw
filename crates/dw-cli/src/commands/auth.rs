@@ -12,7 +12,7 @@ pub async fn login(
         login_with_key(api_key, credentials, config).await
     } else {
         // Browser login flow
-        login_browser(args.org.as_deref(), credentials, config).await
+        login_browser(args.org.as_deref(), args.r#as.as_deref(), credentials, config).await
     }
 }
 
@@ -69,6 +69,7 @@ async fn login_with_key(
 /// Browser-based login flow.
 async fn login_browser(
     org: Option<&str>,
+    custom_name: Option<&str>,
     credentials: &mut Credentials,
     config: &mut Config,
 ) -> anyhow::Result<()> {
@@ -169,43 +170,33 @@ async fn login_browser(
     )
     .await?;
 
-    // Derive account name from email (before @) or fall back to account_name from server.
-    // SSO usernames can be opaque IDs like "google-oauth2|123..." which aren't user-friendly.
-    let account_name = if let Some(email) = params.get("email") {
-        if let Some(prefix) = email.split('@').next() {
-            if params.get("account_type").map(|t| t.as_str()) == Some("organization") {
-                // For org accounts, use org_name or account_name from server
-                params
-                    .get("org_name")
-                    .or_else(|| params.get("account_name"))
-                    .cloned()
-                    .unwrap_or_else(|| prefix.to_string())
-            } else {
-                prefix.to_string()
-            }
-        } else {
-            params
-                .get("account_name")
-                .cloned()
-                .unwrap_or_else(|| "personal".to_string())
-        }
-    } else {
-        params
-            .get("account_name")
-            .cloned()
-            .unwrap_or_else(|| "personal".to_string())
-    };
-
-    // For org accounts, display name should be the org name, not the individual
-    let display_name = if params.get("account_type").map(|s| s.as_str()) == Some("organization") {
+    // Derive display name: org name for org accounts, personal display name otherwise.
+    // Falls back through: display_name → email prefix → "default"
+    let is_org = params.get("account_type").map(|s| s.as_str()) == Some("organization");
+    let display_name = if is_org {
         params
             .get("org_name")
             .or_else(|| params.get("display_name"))
             .cloned()
-            .unwrap_or_default()
+            .unwrap_or_else(|| "default".to_string())
     } else {
-        params.get("display_name").cloned().unwrap_or_default()
+        params
+            .get("display_name")
+            .filter(|s| !s.is_empty())
+            .cloned()
+            .or_else(|| {
+                params
+                    .get("email")
+                    .and_then(|e| e.split('@').next().map(|s| s.to_string()))
+                    .filter(|s| !s.is_empty())
+            })
+            .unwrap_or_else(|| "default".to_string())
     };
+
+    // Account key = custom name (--as) or display name (what you see is what you type)
+    let account_name = custom_name
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| display_name.clone());
 
     let account = Account {
         display_name,
