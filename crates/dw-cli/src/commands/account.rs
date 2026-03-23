@@ -110,8 +110,7 @@ pub fn rename(
                 .map(|(k, _)| k.clone())
         });
 
-    let key = found_key
-        .ok_or_else(|| anyhow::anyhow!("Account '{}' not found.", current))?;
+    let key = found_key.ok_or_else(|| anyhow::anyhow!("Account '{}' not found.", current))?;
 
     if credentials.accounts.contains_key(new) {
         anyhow::bail!("Account '{}' already exists.", new);
@@ -149,8 +148,7 @@ pub fn remove(
                 .map(|(k, _)| k.clone())
         });
 
-    let key = found_key
-        .ok_or_else(|| anyhow::anyhow!("Account '{}' not found.", name))?;
+    let key = found_key.ok_or_else(|| anyhow::anyhow!("Account '{}' not found.", name))?;
 
     credentials.accounts.remove(&key);
 

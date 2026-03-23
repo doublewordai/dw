@@ -12,7 +12,13 @@ pub async fn login(
         login_with_key(api_key, credentials, config).await
     } else {
         // Browser login flow
-        login_browser(args.org.as_deref(), args.r#as.as_deref(), credentials, config).await
+        login_browser(
+            args.org.as_deref(),
+            args.r#as.as_deref(),
+            credentials,
+            config,
+        )
+        .await
     }
 }
 
