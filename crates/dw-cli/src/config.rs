@@ -82,9 +82,9 @@ fn default_account_type() -> String {
 }
 
 impl Account {
-    /// Human-readable display name, never empty.
+    /// Human-readable display name for this account.
     /// Priority: display_name → email prefix → provided key.
-    /// All return values borrow from either `self` or `key`.
+    /// May return empty only if all three sources are empty (malformed credentials).
     pub fn effective_display<'a>(&'a self, key: &'a str) -> &'a str {
         if !self.display_name.is_empty() {
             return &self.display_name;

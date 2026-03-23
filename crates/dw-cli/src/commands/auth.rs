@@ -200,7 +200,7 @@ async fn login_browser(
             .unwrap_or_else(|| "default".to_string())
     };
 
-    // Account key = custom name (--as) or display name (what you see is what you type)
+    // Account key defaults to display/org name, overridable via --as
     let account_name = if let Some(name) = custom_name {
         let trimmed = name.trim();
         if trimmed.is_empty() {
@@ -227,20 +227,30 @@ async fn login_browser(
         org_name: params.get("org_name").cloned(),
     };
 
-    // Deduplicate account name if it collides with a different context
+    // Deduplicate account name if it collides with a different context (case-insensitive)
     let mut final_name = account_name.clone();
-    if credentials.accounts.contains_key(&final_name) {
-        let existing = &credentials.accounts[&final_name];
-        if !config::is_same_context(existing, &account) {
+    let existing_match = credentials
+        .accounts
+        .iter()
+        .find(|(k, _)| k.eq_ignore_ascii_case(&final_name));
+    if let Some((existing_key, existing_account)) = existing_match {
+        if !config::is_same_context(existing_account, &account) {
             let mut suffix = 2;
             loop {
                 let candidate = format!("{}-{}", account_name, suffix);
-                if !credentials.accounts.contains_key(&candidate) {
+                if !credentials
+                    .accounts
+                    .keys()
+                    .any(|k| k.eq_ignore_ascii_case(&candidate))
+                {
                     final_name = candidate;
                     break;
                 }
                 suffix += 1;
             }
+        } else {
+            // Same context — overwrite with the exact existing key to preserve casing
+            final_name = existing_key.clone();
         }
     }
     credentials.accounts.insert(final_name.clone(), account);
