@@ -9,7 +9,7 @@ use crate::output::OutputFormat;
     about = "Doubleword Batch Inference CLI",
     long_about = "Doubleword Batch Inference CLI\n\nUpload JSONL files, run batches, stream results, and send real-time inference requests — all from the terminal.",
     version,
-    after_help = "Quick start:\n  dw login                                  Authenticate via browser\n  dw models list                             See available models\n  dw stream batch.jsonl > results.jsonl      Run and stream results\n  dw realtime <model> \"your prompt\"          One-shot inference\n\nRun 'dw <command> --help' for details on any command.\nDocs: https://github.com/doublewordai/dw"
+    after_help = "Quick start:\n  dw login                                  Authenticate via browser\n  dw login --api-key <KEY>                  Authenticate with API key\n  dw models list                             See available models\n  dw stream batch.jsonl > results.jsonl      Run and stream results\n  dw realtime <model> \"your prompt\"          One-shot inference\n\nRun 'dw <command> --help' for details on any command.\nDocs: https://github.com/doublewordai/dw"
 )]
 pub struct Cli {
     #[command(subcommand)]
