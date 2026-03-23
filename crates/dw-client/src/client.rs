@@ -27,6 +27,8 @@ pub struct DwClientConfig {
     pub timeout: Duration,
     /// TCP connect timeout. Default: 10s.
     pub connect_timeout: Duration,
+    /// Max retries on transient errors (429, 5xx, network). Default: 1.
+    pub max_retries: u32,
 }
 
 impl Default for DwClientConfig {
@@ -39,6 +41,7 @@ impl Default for DwClientConfig {
             cli_version: env!("CARGO_PKG_VERSION").to_string(),
             timeout: Duration::from_secs(300),
             connect_timeout: Duration::from_secs(10),
+            max_retries: 1,
         }
     }
 }
@@ -188,70 +191,98 @@ impl DwClient {
         Ok(())
     }
 
-    /// Send a request, retrying once on 429 (rate limited).
+    /// Send a request, retrying on transient errors (429, 5xx, network).
     ///
-    /// On 429, extracts the retry delay from the `Retry-After` header (integer
-    /// seconds only; HTTP-date values fall back to the default) or the
-    /// `retry_after_seconds` field in the JSON response body. Defaults to 30s
-    /// if neither is present.
+    /// Uses `config.max_retries` (default: 1). On 429, extracts the retry delay
+    /// from the `Retry-After` header (integer seconds only; HTTP-date values
+    /// fall back to the default) or `retry_after_seconds` in the JSON body.
+    /// Defaults to 30s if neither is present. On 5xx/network errors, retries
+    /// with exponential backoff (2s, 4s, 8s...).
     async fn send_with_retry(
         &self,
         request: reqwest::RequestBuilder,
     ) -> Result<reqwest::Response, DwError> {
-        // Try to clone the request for potential retry
-        let retry_request = request.try_clone();
+        let max_retries = self.config.max_retries;
 
-        let response = request.send().await?;
-
-        if response.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
-            // Extract retry delay from Retry-After header (integer seconds)
-            let header_retry = response
-                .headers()
-                .get("retry-after")
-                .and_then(|v| v.to_str().ok())
-                .and_then(|v| v.parse::<u64>().ok());
-
-            // If no valid header, try parsing the body for retry_after_seconds.
-            // Always consume the body to allow connection reuse in the pool.
-            let retry_after = if let Some(secs) = header_retry {
-                // Drain the body even though we already have the delay from headers
-                let _ = response.bytes().await;
-                secs
-            } else {
-                let body = response
-                    .json::<crate::error::ApiErrorBody>()
-                    .await
-                    .unwrap_or(crate::error::ApiErrorBody {
-                        error: None,
-                        message: None,
-                        retry_after_seconds: None,
-                    });
-                body.retry_after_seconds.unwrap_or(30)
-            };
-
-            tracing::warn!(retry_after, "Rate limited (429), retrying");
-
-            tokio::time::sleep(Duration::from_secs(retry_after)).await;
-
-            // Retry if we could clone the request
-            if let Some(retry) = retry_request {
-                let response = retry.send().await?;
-                if response.status().is_success() {
-                    return Ok(response);
-                }
-                return Err(DwError::from_response(response).await);
+        // Clone requests up front for potential retries
+        let mut clones: Vec<reqwest::RequestBuilder> = Vec::new();
+        let mut current = request;
+        for _ in 0..max_retries {
+            if let Some(clone) = current.try_clone() {
+                clones.push(clone);
             }
-
-            // Can't retry (request body was streamed) — return the rate limit error
-            return Err(DwError::RateLimited {
-                retry_after: Some(retry_after),
-            });
+            // If try_clone fails (streamed body), we can't retry — proceed with what we have
         }
 
-        if response.status().is_success() {
-            Ok(response)
-        } else {
-            Err(DwError::from_response(response).await)
+        let mut attempt = 0;
+        loop {
+            let response = match current.send().await {
+                Ok(r) => r,
+                Err(e) => {
+                    // Network error — retry if transient and we have retries left
+                    if attempt < clones.len() as u32 && (e.is_timeout() || e.is_connect()) {
+                        let delay = 2u64.pow(attempt + 1);
+                        tracing::warn!(attempt, delay, "Network error, retrying: {}", e);
+                        tokio::time::sleep(Duration::from_secs(delay)).await;
+                        current = clones.remove(0);
+                        attempt += 1;
+                        continue;
+                    }
+                    return Err(e.into());
+                }
+            };
+
+            if response.status() == reqwest::StatusCode::TOO_MANY_REQUESTS
+                && attempt < clones.len() as u32
+            {
+                let header_retry = response
+                    .headers()
+                    .get("retry-after")
+                    .and_then(|v| v.to_str().ok())
+                    .and_then(|v| v.parse::<u64>().ok());
+
+                let retry_after = if let Some(secs) = header_retry {
+                    let _ = response.bytes().await;
+                    secs
+                } else {
+                    let body = response
+                        .json::<crate::error::ApiErrorBody>()
+                        .await
+                        .unwrap_or(crate::error::ApiErrorBody {
+                            error: None,
+                            message: None,
+                            retry_after_seconds: None,
+                        });
+                    body.retry_after_seconds.unwrap_or(30)
+                };
+
+                tracing::warn!(attempt, retry_after, "Rate limited (429), retrying");
+                tokio::time::sleep(Duration::from_secs(retry_after)).await;
+                current = clones.remove(0);
+                attempt += 1;
+                continue;
+            }
+
+            if response.status().is_server_error() && attempt < clones.len() as u32 {
+                let delay = 2u64.pow(attempt + 1);
+                tracing::warn!(
+                    attempt,
+                    delay,
+                    "Server error ({}), retrying",
+                    response.status()
+                );
+                let _ = response.bytes().await;
+                tokio::time::sleep(Duration::from_secs(delay)).await;
+                current = clones.remove(0);
+                attempt += 1;
+                continue;
+            }
+
+            // Terminal response — return success or error
+            if response.status().is_success() {
+                return Ok(response);
+            }
+            return Err(DwError::from_response(response).await);
         }
     }
 

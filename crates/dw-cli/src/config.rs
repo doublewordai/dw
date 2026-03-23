@@ -24,12 +24,19 @@ pub struct ClientConfig {
     /// Connect timeout in seconds. Default: 10.
     #[serde(default = "default_connect_timeout_secs")]
     pub connect_timeout_secs: u64,
-    /// Max retries on transient errors (network, 5xx). Default: 3.
+    /// Max retries on transient errors (network, 429, 5xx). Default: 1.
     #[serde(default = "default_max_retries")]
     pub max_retries: u32,
-    /// Polling interval in seconds for `watch` and `stream`. Default: 2.
+    /// Polling interval in seconds for `watch` and `stream`. Default: 2. Minimum: 1.
     #[serde(default = "default_poll_interval_secs")]
     pub poll_interval_secs: u64,
+}
+
+impl ClientConfig {
+    /// Get poll interval, clamped to at least 1 second.
+    pub fn effective_poll_interval(&self) -> u64 {
+        self.poll_interval_secs.max(1)
+    }
 }
 
 fn default_timeout_secs() -> u64 {
@@ -283,6 +290,7 @@ pub fn build_client(
         platform_key: account.platform_key.clone(),
         timeout: std::time::Duration::from_secs(client_config.timeout_secs),
         connect_timeout: std::time::Duration::from_secs(client_config.connect_timeout_secs),
+        max_retries: client_config.max_retries,
         ..Default::default()
     })
 }

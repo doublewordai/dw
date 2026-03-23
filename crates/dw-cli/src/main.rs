@@ -113,11 +113,9 @@ async fn run() -> anyhow::Result<()> {
                     .map_err(|e| anyhow::anyhow!("{}", e))?;
             let account = account.clone();
             let client = build_client(&account, &config, &server_overrides)?;
-            let poll_interval = config
-                .client
-                .as_ref()
-                .map(|c| c.poll_interval_secs)
-                .unwrap_or(2);
+            let client_cfg = config.client.clone().unwrap_or_default();
+            let poll_interval = client_cfg.effective_poll_interval();
+            let max_retries = client_cfg.max_retries;
 
             match cmd {
                 Commands::Whoami => commands::auth::whoami(&client).await,
@@ -213,7 +211,7 @@ async fn run() -> anyhow::Result<()> {
                 },
 
                 Commands::Stream(args) => {
-                    commands::stream::run(&client, &args, poll_interval).await
+                    commands::stream::run(&client, &args, poll_interval, max_retries).await
                 }
 
                 Commands::Realtime(args) => commands::realtime::run(&client, &args).await,

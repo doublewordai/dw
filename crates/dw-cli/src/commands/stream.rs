@@ -17,6 +17,7 @@ pub async fn run(
     client: &DwClient,
     args: &StreamArgs,
     poll_interval_secs: u64,
+    max_retries: u32,
 ) -> anyhow::Result<()> {
     let paths = collect_jsonl_paths(&args.path)?;
 
@@ -27,7 +28,7 @@ pub async fn run(
     if paths.len() == 1 {
         // Single file: simple sequential flow
         let batch_id = upload_and_create(client, &paths[0], args, None).await?;
-        return stream_single(client, &batch_id, poll_interval_secs).await;
+        return stream_single(client, &batch_id, poll_interval_secs, max_retries).await;
     }
 
     // Multiple files: pipeline uploads with concurrent streaming.
@@ -43,7 +44,15 @@ pub async fn run(
         let mp = multi.clone();
         let stdout = stdout.clone();
         stream_handles.push(tokio::spawn(async move {
-            stream_with_multi(&client, &batch_id, &mp, &stdout, poll_interval_secs).await
+            stream_with_multi(
+                &client,
+                &batch_id,
+                &mp,
+                &stdout,
+                poll_interval_secs,
+                max_retries,
+            )
+            .await
         }));
     }
 
@@ -125,6 +134,7 @@ async fn stream_single(
     client: &DwClient,
     batch_id: &str,
     poll_interval_secs: u64,
+    max_retries: u32,
 ) -> anyhow::Result<()> {
     let bar = ProgressBar::new(0);
     bar.set_style(
@@ -141,6 +151,7 @@ async fn stream_single(
         &bar,
         &tokio::sync::Mutex::new(std::io::stdout()),
         poll_interval_secs,
+        max_retries,
     )
     .await
 }
@@ -152,6 +163,7 @@ async fn stream_with_multi(
     multi: &MultiProgress,
     stdout: &tokio::sync::Mutex<std::io::Stdout>,
     poll_interval_secs: u64,
+    max_retries: u32,
 ) -> anyhow::Result<()> {
     let bar = multi.add(ProgressBar::new(0));
     bar.set_style(
@@ -162,22 +174,31 @@ async fn stream_with_multi(
     );
     bar.set_message(format!("{} — streaming", batch_id));
 
-    stream_loop(client, batch_id, &bar, stdout, poll_interval_secs).await
+    stream_loop(
+        client,
+        batch_id,
+        &bar,
+        stdout,
+        poll_interval_secs,
+        max_retries,
+    )
+    .await
 }
 
 /// Core streaming loop: poll for completed results and write to stdout.
-/// Retries transient network errors up to 3 times with exponential backoff.
+/// Retries transient network errors with exponential backoff.
 async fn stream_loop(
     client: &DwClient,
     batch_id: &str,
     bar: &ProgressBar,
     stdout: &tokio::sync::Mutex<std::io::Stdout>,
     poll_interval_secs: u64,
+    max_retries: u32,
 ) -> anyhow::Result<()> {
     let mut cursor: usize = 0;
     let page_size: usize = 100;
     let mut consecutive_errors: u32 = 0;
-    const MAX_RETRIES: u32 = 3;
+    let max_retries = max_retries.max(1); // At least 1 retry for polling resilience
 
     loop {
         // Fetch results page — retry only transient errors
@@ -191,14 +212,14 @@ async fn stream_loop(
             }
             Err(e) if e.is_transient() => {
                 consecutive_errors += 1;
-                if consecutive_errors > MAX_RETRIES {
+                if consecutive_errors > max_retries {
                     bar.abandon_with_message(format!("{} — connection lost", batch_id));
-                    anyhow::bail!("Lost connection after {} retries: {}", MAX_RETRIES, e);
+                    anyhow::bail!("Lost connection after {} retries: {}", max_retries, e);
                 }
                 let delay = 2u64.pow(consecutive_errors);
                 bar.set_message(format!(
                     "{} — retrying ({}/{})",
-                    batch_id, consecutive_errors, MAX_RETRIES
+                    batch_id, consecutive_errors, max_retries
                 ));
                 tokio::time::sleep(Duration::from_secs(delay)).await;
                 continue;
@@ -225,14 +246,14 @@ async fn stream_loop(
             }
             Err(e) if e.is_transient() => {
                 consecutive_errors += 1;
-                if consecutive_errors > MAX_RETRIES {
+                if consecutive_errors > max_retries {
                     bar.abandon_with_message(format!("{} — connection lost", batch_id));
-                    anyhow::bail!("Lost connection after {} retries: {}", MAX_RETRIES, e);
+                    anyhow::bail!("Lost connection after {} retries: {}", max_retries, e);
                 }
                 let delay = 2u64.pow(consecutive_errors);
                 bar.set_message(format!(
                     "{} — retrying ({}/{})",
-                    batch_id, consecutive_errors, MAX_RETRIES
+                    batch_id, consecutive_errors, max_retries
                 ));
                 tokio::time::sleep(Duration::from_secs(delay)).await;
                 continue;
