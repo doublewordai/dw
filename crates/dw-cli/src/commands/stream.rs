@@ -198,7 +198,8 @@ async fn stream_loop(
     let mut cursor: usize = 0;
     let page_size: usize = 100;
     let mut consecutive_errors: u32 = 0;
-    let max_retries = max_retries.max(1); // At least 1 retry for polling resilience
+    // Clamp to sane range; 0 means no retries for polling errors
+    let max_retries = max_retries.min(10);
 
     loop {
         // Fetch results page — retry only transient errors
@@ -216,7 +217,7 @@ async fn stream_loop(
                     bar.abandon_with_message(format!("{} — connection lost", batch_id));
                     anyhow::bail!("Lost connection after {} retries: {}", max_retries, e);
                 }
-                let delay = 2u64.pow(consecutive_errors);
+                let delay = 2u64.saturating_pow(consecutive_errors).min(60);
                 bar.set_message(format!(
                     "{} — retrying ({}/{})",
                     batch_id, consecutive_errors, max_retries
@@ -250,7 +251,7 @@ async fn stream_loop(
                     bar.abandon_with_message(format!("{} — connection lost", batch_id));
                     anyhow::bail!("Lost connection after {} retries: {}", max_retries, e);
                 }
-                let delay = 2u64.pow(consecutive_errors);
+                let delay = 2u64.saturating_pow(consecutive_errors).min(60);
                 bar.set_message(format!(
                     "{} — retrying ({}/{})",
                     batch_id, consecutive_errors, max_retries

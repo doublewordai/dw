@@ -397,7 +397,7 @@ max_retries = 1             # Retries on transient errors (default: 1)
 poll_interval_secs = 2      # Polling interval for watch/stream (default: 2s)
 ```
 
-All fields are optional — defaults apply if the section is omitted.
+All fields are optional with sensible defaults. Omit the entire `[client]` section or individual fields — defaults apply per-field. Set `max_retries = 0` to disable retries entirely.
 
 ## Development
 
