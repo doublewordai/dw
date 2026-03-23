@@ -1,22 +1,6 @@
 use crate::config::{self, Config, Credentials};
 use crate::output::OutputFormat;
 
-/// Get effective display name for an account, never empty.
-fn effective_display(name: &str, account: &crate::config::Account) -> String {
-    let dn = &account.display_name;
-    if dn.is_empty() {
-        account
-            .email
-            .split('@')
-            .next()
-            .filter(|s| !s.is_empty())
-            .map(|s| s.to_string())
-            .unwrap_or_else(|| name.to_string())
-    } else {
-        dn.clone()
-    }
-}
-
 pub fn list(config: &Config, credentials: &Credentials, _format: OutputFormat) {
     if credentials.accounts.is_empty() {
         eprintln!("No accounts stored. Run `dw login` to authenticate.");
@@ -27,7 +11,7 @@ pub fn list(config: &Config, credentials: &Credentials, _format: OutputFormat) {
 
     for (name, account) in &credentials.accounts {
         let marker = if name == active { "*" } else { " " };
-        let display = effective_display(name, account);
+        let display = account.effective_display(name);
         println!(
             " {} {} (type: {}, email: {})",
             marker, display, account.account_type, account.email
@@ -38,7 +22,7 @@ pub fn list(config: &Config, credentials: &Credentials, _format: OutputFormat) {
         let names: Vec<_> = credentials
             .accounts
             .iter()
-            .map(|(name, a)| effective_display(name, a))
+            .map(|(name, a)| a.effective_display(name))
             .collect();
         eprintln!("\nSwitch with: dw account switch <name>");
         eprintln!("Available: {}", names.join(", "));
@@ -46,23 +30,46 @@ pub fn list(config: &Config, credentials: &Credentials, _format: OutputFormat) {
 }
 
 pub fn switch(name: &str, config: &mut Config, credentials: &Credentials) -> anyhow::Result<()> {
-    // Try exact key match first, then effective display name match
-    let found = credentials
+    // Try exact key match first
+    let by_key = credentials
         .accounts
         .keys()
         .find(|k| k.eq_ignore_ascii_case(name))
-        .cloned()
-        .or_else(|| {
-            credentials
-                .accounts
-                .iter()
-                .find(|(k, a)| effective_display(k, a).eq_ignore_ascii_case(name))
-                .map(|(k, _)| k.clone())
-        });
+        .cloned();
+
+    let found = if let Some(key) = by_key {
+        Some(key)
+    } else {
+        // Try display name match, detect ambiguity
+        let matches: Vec<_> = credentials
+            .accounts
+            .iter()
+            .filter(|(k, a)| a.effective_display(k).eq_ignore_ascii_case(name))
+            .map(|(k, _)| k.clone())
+            .collect();
+
+        if matches.len() == 1 {
+            Some(matches.into_iter().next().unwrap())
+        } else if matches.len() > 1 {
+            anyhow::bail!(
+                "Multiple accounts match '{}'. Switch by key instead:\n  {}",
+                name,
+                matches
+                    .iter()
+                    .map(|k| format!("dw account switch {}", k))
+                    .collect::<Vec<_>>()
+                    .join("\n  ")
+            );
+        } else {
+            None
+        }
+    };
 
     match found {
         Some(key) => {
-            let display = effective_display(&key, &credentials.accounts[&key]);
+            let display = credentials.accounts[&key]
+                .effective_display(&key)
+                .to_string();
             config.active_account = Some(key);
             config::save_config(config)?;
             eprintln!("Switched to account: {}", display);
@@ -72,7 +79,7 @@ pub fn switch(name: &str, config: &mut Config, credentials: &Credentials) -> any
             let available: Vec<_> = credentials
                 .accounts
                 .iter()
-                .map(|(name, a)| effective_display(name, a))
+                .map(|(name, a)| a.effective_display(name))
                 .collect();
             anyhow::bail!(
                 "Account '{}' not found. Available: {}",
@@ -87,7 +94,7 @@ pub fn current(config: &Config, credentials: &Credentials) {
     match config.active_account.as_deref() {
         Some(name) => {
             if let Some(account) = credentials.accounts.get(name) {
-                let display = effective_display(name, account);
+                let display = account.effective_display(name);
                 println!(
                     "{} (type: {}, email: {})",
                     display, account.account_type, account.email

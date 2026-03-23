@@ -81,6 +81,31 @@ fn default_account_type() -> String {
     "personal".to_string()
 }
 
+impl Account {
+    /// Human-readable display name, guaranteed non-empty.
+    /// Falls back to email prefix, then the provided key.
+    pub fn effective_display<'a>(&'a self, key: &'a str) -> &'a str {
+        if !self.display_name.is_empty() {
+            return &self.display_name;
+        }
+        // Fall back to email prefix
+        let prefix = self.email.split('@').next().unwrap_or("");
+        if !prefix.is_empty() {
+            // Can't return a slice of a computed value, so fall back to key
+            // when display_name is empty but email has a prefix, we use key
+            // since we can't return a borrow of a substring of email here
+            // (it would work, email is &'a str via self)
+            return self.email.split('@').next().unwrap_or(key);
+        }
+        key
+    }
+}
+
+/// Check if an account is the same context (same user_id, same account type, same org).
+pub fn is_same_context(a: &Account, b: &Account) -> bool {
+    a.user_id == b.user_id && a.account_type == b.account_type && a.org_id == b.org_id
+}
+
 /// Get the DW config directory path.
 pub fn config_dir() -> PathBuf {
     dirs::home_dir()
@@ -152,14 +177,16 @@ pub fn resolve_account<'a>(
         .iter()
         .find(|(k, _)| k.eq_ignore_ascii_case(account_name))
         .or_else(|| {
-            credentials.accounts.iter().find(|(_, a)| {
-                let display = if a.display_name.is_empty() {
-                    a.email.split('@').next().unwrap_or("").to_string()
-                } else {
-                    a.display_name.clone()
-                };
-                display.eq_ignore_ascii_case(account_name)
-            })
+            let matches: Vec<_> = credentials
+                .accounts
+                .iter()
+                .filter(|(k, a)| a.effective_display(k).eq_ignore_ascii_case(account_name))
+                .collect();
+            if matches.len() == 1 {
+                Some(matches[0])
+            } else {
+                None
+            }
         })
         .ok_or_else(|| {
             format!(

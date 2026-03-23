@@ -223,12 +223,11 @@ async fn login_browser(
         org_name: params.get("org_name").cloned(),
     };
 
-    // Deduplicate account name if it collides with an existing account
+    // Deduplicate account name if it collides with a different context
     let mut final_name = account_name.clone();
     if credentials.accounts.contains_key(&final_name) {
-        // Only deduplicate if it's a genuinely different account (different user_id)
         let existing = &credentials.accounts[&final_name];
-        if existing.user_id != account.user_id {
+        if !config::is_same_context(existing, &account) {
             let mut suffix = 2;
             loop {
                 let candidate = format!("{}-{}", account_name, suffix);
