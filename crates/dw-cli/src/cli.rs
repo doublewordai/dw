@@ -3,13 +3,26 @@ use std::path::PathBuf;
 
 use crate::output::OutputFormat;
 
+const AFTER_HELP: &str = "\
+Quick start:
+  dw login                                  Authenticate via browser
+  dw login --api-key <KEY>                  Authenticate with API key
+  dw models list                             See available models
+  dw stream batch.jsonl > results.jsonl      Run and stream results
+  dw realtime <model> \"your prompt\"          One-shot inference
+
+Run 'dw <command> --help' for details on any command.
+Docs: https://github.com/doublewordai/dw";
+
 #[derive(Parser)]
 #[command(
     name = "dw",
     about = "Doubleword Batch Inference CLI",
-    long_about = "Doubleword Batch Inference CLI\n\nUpload JSONL files, run batches, stream results, and send real-time inference requests — all from the terminal.",
+    long_about = "Doubleword Batch Inference CLI\n\n\
+        Upload JSONL files, run batches, stream results, and send \
+        real-time inference requests — all from the terminal.",
     version,
-    after_help = "Quick start:\n  dw login                                  Authenticate via browser\n  dw login --api-key <KEY>                  Authenticate with API key\n  dw models list                             See available models\n  dw stream batch.jsonl > results.jsonl      Run and stream results\n  dw realtime <model> \"your prompt\"          One-shot inference\n\nRun 'dw <command> --help' for details on any command.\nDocs: https://github.com/doublewordai/dw"
+    after_help = AFTER_HELP,
 )]
 pub struct Cli {
     #[command(subcommand)]
