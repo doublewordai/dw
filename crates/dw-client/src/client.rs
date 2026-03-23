@@ -23,7 +23,10 @@ pub struct DwClientConfig {
     pub inference_key: Option<String>,
     pub platform_key: Option<String>,
     pub cli_version: String,
+    /// Total request timeout. Default: 300s (5 minutes).
     pub timeout: Duration,
+    /// TCP connect timeout. Default: 10s.
+    pub connect_timeout: Duration,
 }
 
 impl Default for DwClientConfig {
@@ -35,6 +38,7 @@ impl Default for DwClientConfig {
             platform_key: None,
             cli_version: env!("CARGO_PKG_VERSION").to_string(),
             timeout: Duration::from_secs(300),
+            connect_timeout: Duration::from_secs(10),
         }
     }
 }
@@ -64,6 +68,7 @@ impl DwClient {
             .user_agent(format!("{}/{}", USER_AGENT, config.cli_version))
             .default_headers(default_headers)
             .timeout(config.timeout)
+            .connect_timeout(config.connect_timeout)
             .build()?;
 
         Ok(Self { http, config })

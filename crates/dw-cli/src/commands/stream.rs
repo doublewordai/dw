@@ -13,7 +13,11 @@ use crate::jsonl;
 /// For multiple files: each batch starts streaming as soon as it's created —
 /// uploads and streaming run concurrently (pipelined). Results from all
 /// batches interleave into a single stdout output.
-pub async fn run(client: &DwClient, args: &StreamArgs) -> anyhow::Result<()> {
+pub async fn run(
+    client: &DwClient,
+    args: &StreamArgs,
+    poll_interval_secs: u64,
+) -> anyhow::Result<()> {
     let paths = collect_jsonl_paths(&args.path)?;
 
     if paths.is_empty() {
@@ -23,7 +27,7 @@ pub async fn run(client: &DwClient, args: &StreamArgs) -> anyhow::Result<()> {
     if paths.len() == 1 {
         // Single file: simple sequential flow
         let batch_id = upload_and_create(client, &paths[0], args, None).await?;
-        return stream_single(client, &batch_id).await;
+        return stream_single(client, &batch_id, poll_interval_secs).await;
     }
 
     // Multiple files: pipeline uploads with concurrent streaming.
@@ -39,7 +43,7 @@ pub async fn run(client: &DwClient, args: &StreamArgs) -> anyhow::Result<()> {
         let mp = multi.clone();
         let stdout = stdout.clone();
         stream_handles.push(tokio::spawn(async move {
-            stream_with_multi(&client, &batch_id, &mp, &stdout).await
+            stream_with_multi(&client, &batch_id, &mp, &stdout, poll_interval_secs).await
         }));
     }
 
@@ -117,7 +121,11 @@ async fn upload_and_create(
 }
 
 /// Stream results from a single batch with a standalone progress bar.
-async fn stream_single(client: &DwClient, batch_id: &str) -> anyhow::Result<()> {
+async fn stream_single(
+    client: &DwClient,
+    batch_id: &str,
+    poll_interval_secs: u64,
+) -> anyhow::Result<()> {
     let bar = ProgressBar::new(0);
     bar.set_style(
         ProgressStyle::default_bar()
@@ -132,6 +140,7 @@ async fn stream_single(client: &DwClient, batch_id: &str) -> anyhow::Result<()> 
         batch_id,
         &bar,
         &tokio::sync::Mutex::new(std::io::stdout()),
+        poll_interval_secs,
     )
     .await
 }
@@ -142,6 +151,7 @@ async fn stream_with_multi(
     batch_id: &str,
     multi: &MultiProgress,
     stdout: &tokio::sync::Mutex<std::io::Stdout>,
+    poll_interval_secs: u64,
 ) -> anyhow::Result<()> {
     let bar = multi.add(ProgressBar::new(0));
     bar.set_style(
@@ -152,7 +162,7 @@ async fn stream_with_multi(
     );
     bar.set_message(format!("{} — streaming", batch_id));
 
-    stream_loop(client, batch_id, &bar, stdout).await
+    stream_loop(client, batch_id, &bar, stdout, poll_interval_secs).await
 }
 
 /// Core streaming loop: poll for completed results and write to stdout.
@@ -162,6 +172,7 @@ async fn stream_loop(
     batch_id: &str,
     bar: &ProgressBar,
     stdout: &tokio::sync::Mutex<std::io::Stdout>,
+    poll_interval_secs: u64,
 ) -> anyhow::Result<()> {
     let mut cursor: usize = 0;
     let page_size: usize = 100;
@@ -272,7 +283,7 @@ async fn stream_loop(
             return Ok(());
         }
 
-        tokio::time::sleep(Duration::from_secs(2)).await;
+        tokio::time::sleep(Duration::from_secs(poll_interval_secs)).await;
     }
 }
 

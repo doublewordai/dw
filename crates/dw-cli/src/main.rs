@@ -107,6 +107,11 @@ async fn run() -> anyhow::Result<()> {
                     .map_err(|e| anyhow::anyhow!("{}", e))?;
             let account = account.clone();
             let client = build_client(&account, &config, &server_overrides)?;
+            let poll_interval = config
+                .client
+                .as_ref()
+                .map(|c| c.poll_interval_secs)
+                .unwrap_or(2);
 
             match cmd {
                 Commands::Whoami => commands::auth::whoami(&client).await,
@@ -194,14 +199,16 @@ async fn run() -> anyhow::Result<()> {
                         commands::batches::results(&client, &id, output_file.as_deref()).await
                     }
                     BatchCommands::Run(args) => {
-                        commands::batches::run(&client, &args, format).await
+                        commands::batches::run(&client, &args, format, poll_interval).await
                     }
                     BatchCommands::Watch { ids } => {
-                        commands::batches::watch_batches(&client, &ids).await
+                        commands::batches::watch_batches(&client, &ids, poll_interval).await
                     }
                 },
 
-                Commands::Stream(args) => commands::stream::run(&client, &args).await,
+                Commands::Stream(args) => {
+                    commands::stream::run(&client, &args, poll_interval).await
+                }
 
                 Commands::Realtime(args) => commands::realtime::run(&client, &args).await,
 

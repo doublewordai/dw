@@ -180,6 +180,7 @@ pub async fn run(
     client: &DwClient,
     args: &BatchRunArgs,
     format: OutputFormat,
+    poll_interval_secs: u64,
 ) -> anyhow::Result<()> {
     let paths = collect_jsonl_paths(&args.path)?;
 
@@ -251,7 +252,7 @@ pub async fn run(
             let batch_id = batch.id.clone();
             let multi_clone = multi.clone();
             watch_handles.push(tokio::spawn(async move {
-                watch_single(&client, &batch_id, multi_clone.as_ref()).await
+                watch_single(&client, &batch_id, multi_clone.as_ref(), poll_interval_secs).await
             }));
         } else {
             print_item(&batch, format);
@@ -274,9 +275,13 @@ pub async fn run(
 }
 
 /// Watch one or more batches until completion with parallel progress bars.
-pub async fn watch_batches(client: &DwClient, batch_ids: &[String]) -> anyhow::Result<()> {
+pub async fn watch_batches(
+    client: &DwClient,
+    batch_ids: &[String],
+    poll_interval_secs: u64,
+) -> anyhow::Result<()> {
     if batch_ids.len() == 1 {
-        return watch_single(client, &batch_ids[0], None).await;
+        return watch_single(client, &batch_ids[0], None, poll_interval_secs).await;
     }
 
     let multi = indicatif::MultiProgress::new();
@@ -287,7 +292,7 @@ pub async fn watch_batches(client: &DwClient, batch_ids: &[String]) -> anyhow::R
         let batch_id = batch_id.clone();
         let multi = multi.clone();
         handles.push(tokio::spawn(async move {
-            watch_single(&client, &batch_id, Some(&multi)).await
+            watch_single(&client, &batch_id, Some(&multi), poll_interval_secs).await
         }));
     }
 
@@ -311,6 +316,7 @@ pub async fn watch_single(
     client: &DwClient,
     batch_id: &str,
     multi: Option<&indicatif::MultiProgress>,
+    poll_interval_secs: u64,
 ) -> anyhow::Result<()> {
     use indicatif::{ProgressBar, ProgressStyle};
 
@@ -390,7 +396,7 @@ pub async fn watch_single(
             }
         }
 
-        tokio::time::sleep(Duration::from_secs(2)).await;
+        tokio::time::sleep(Duration::from_secs(poll_interval_secs)).await;
     }
 }
 
