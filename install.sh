@@ -137,7 +137,11 @@ install() {
 }
 
 main() {
-    info "Doubleword CLI Installer"
+    echo ""
+    echo "  ╔══════════════════════════════════════╗"
+    echo "  ║     DOUBLEWORD BATCH INFERENCE       ║"
+    echo "  ║              CLI                     ║"
+    echo "  ╚══════════════════════════════════════╝"
     echo ""
 
     detect_platform
