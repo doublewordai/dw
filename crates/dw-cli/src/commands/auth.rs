@@ -196,8 +196,19 @@ async fn login_browser(
             .unwrap_or_else(|| "personal".to_string())
     };
 
+    // For org accounts, display name should be the org name, not the individual
+    let display_name = if params.get("account_type").map(|s| s.as_str()) == Some("organization") {
+        params
+            .get("org_name")
+            .or_else(|| params.get("display_name"))
+            .cloned()
+            .unwrap_or_default()
+    } else {
+        params.get("display_name").cloned().unwrap_or_default()
+    };
+
     let account = Account {
-        display_name: params.get("display_name").cloned().unwrap_or_default(),
+        display_name,
         user_id: params.get("user_id").cloned().unwrap_or_default(),
         email: params.get("email").cloned().unwrap_or_default(),
         inference_key: Some(inference_key.clone()),
