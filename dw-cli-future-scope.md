@@ -61,11 +61,13 @@ Items consciously deferred from v1. Revisit after initial release and internal t
 - Enables programmatic use in scripts, notebooks, CI pipelines
 - Architecture already supports this: `dw-client` has no CLI dependencies
 
-## API Key Expiry & Rotation
+## API Key Expiry, Rotation & Re-Auth
 - TTL on CLI keys (configurable, default ~30 days)
 - Auto-rotation: CLI detects expiring key, re-authenticates transparently
 - Notification: warn user N days before expiry
 - Server-side: add `expires_at` column to `api_keys` table
+- Token refresh / re-auth prompting when session expires mid-operation
+- Detect 401 mid-workflow and prompt for `dw login` instead of just failing
 
 ## Project Scaffolding (`dw init`)
 - `dw init` — create project structure (pyproject.toml, sample JSONL, .env template)
@@ -97,6 +99,28 @@ Items consciously deferred from v1. Revisit after initial release and internal t
 - `dw config set output-format json`
 - Per-account config overrides
 - Environment variable overrides for CI
+- Advanced client configuration: request timeouts, retry count, retry backoff strategy
+- Configurable polling intervals for `watch` and `stream`
+
+## Request & Usage Monitoring
+- `dw requests list` — list recent requests with model, status, latency
+- `dw requests list --model X --since 2h` — filtered views
+- `dw usage` — show usage summary (tokens, requests, cost by model, time period)
+- Be cautious about enabling high-poll-rate consumption of analytics data
+
+## Webhook Secret Rotation
+- `dw webhooks rotate-secret <webhook_id>` — rotate signing secret via CLI
+- Currently webhooks can be created/listed/deleted but secret rotation is not exposed
+
+## Installation & Distribution Polish
+- Host install script on doubleword.ai landing page (`curl -fsSL https://doubleword.ai/install.sh | sh`)
+- Landing page integration: "Download or use web console" with prominent install command
+- Link to CLI documentation from landing page
+- `dw update` — self-update binary to latest release
+- First-run experience: ASCII art banner, welcome message with quick-start steps when no credentials found
+- Verify install.sh against real GitHub releases (currently functional but needs live release to test curl flow)
+- Static linking where possible for maximum portability
+- CI-friendly: must work non-interactive, no browser, API key only
 
 ## Apple Code Signing & Notarization
 - Sign macOS binaries to avoid Gatekeeper warnings

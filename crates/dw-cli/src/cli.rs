@@ -95,6 +95,10 @@ pub struct LoginArgs {
     /// Login within an organization context.
     #[arg(long)]
     pub org: Option<String>,
+
+    /// Custom name for this account (overrides auto-generated name).
+    #[arg(long, value_name = "NAME")]
+    pub r#as: Option<String>,
 }
 
 #[derive(clap::Args)]
@@ -145,6 +149,18 @@ pub enum AccountCommands {
     },
     /// Show the currently active account.
     Current,
+    /// Rename an account.
+    Rename {
+        /// Current account name.
+        current: String,
+        /// New name for the account.
+        new: String,
+    },
+    /// Remove a stored account.
+    Remove {
+        /// Account name to remove.
+        name: String,
+    },
 }
 
 // --- Models ---
