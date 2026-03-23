@@ -45,7 +45,7 @@ fn maybe_show_welcome(credentials: &config::Credentials) {
         return;
     }
     eprintln!(
-        "Not logged in. Run `dw login` to authenticate or `dw login --api-key` for headless setup."
+        "Not logged in. Run `dw login` to authenticate or `dw login --api-key <KEY>` for headless setup."
     );
 }
 
@@ -54,8 +54,6 @@ async fn run() -> anyhow::Result<()> {
 
     let mut config = load_config();
     let mut credentials = load_credentials();
-
-    maybe_show_welcome(&credentials);
 
     let format = cli.output.unwrap_or_else(OutputFormat::default_for_stdout);
 
@@ -124,6 +122,7 @@ async fn run() -> anyhow::Result<()> {
 
         // --- Commands requiring authentication ---
         cmd => {
+            maybe_show_welcome(&credentials);
             let (_account_name, account) =
                 resolve_account(cli.account.as_deref(), &config, &credentials)
                     .map_err(|e| anyhow::anyhow!("{}", e))?;
