@@ -248,7 +248,7 @@ async fn login_browser(
 
     eprintln!(
         "Logged in as {}. Active account: {}",
-        credentials.accounts[&account_name].display_name, account_name
+        credentials.accounts[&final_name].display_name, final_name
     );
 
     Ok(())

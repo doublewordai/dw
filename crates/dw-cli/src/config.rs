@@ -146,11 +146,21 @@ pub fn resolve_account<'a>(
             "No active account. Run `dw login` to authenticate or `dw account switch <name>` to select an account.".to_string()
         })?;
 
-    // Find in credentials (case-insensitive key lookup)
+    // Find in credentials: try key match first, then display name match
     let (key, account) = credentials
         .accounts
         .iter()
         .find(|(k, _)| k.eq_ignore_ascii_case(account_name))
+        .or_else(|| {
+            credentials.accounts.iter().find(|(_, a)| {
+                let display = if a.display_name.is_empty() {
+                    a.email.split('@').next().unwrap_or("").to_string()
+                } else {
+                    a.display_name.clone()
+                };
+                display.eq_ignore_ascii_case(account_name)
+            })
+        })
         .ok_or_else(|| {
             format!(
                 "Account '{}' not found. Run `dw account list` to see available accounts.",

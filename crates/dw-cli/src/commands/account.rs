@@ -46,7 +46,7 @@ pub fn list(config: &Config, credentials: &Credentials, _format: OutputFormat) {
 }
 
 pub fn switch(name: &str, config: &mut Config, credentials: &Credentials) -> anyhow::Result<()> {
-    // Try exact key match first, then display name match
+    // Try exact key match first, then effective display name match
     let found = credentials
         .accounts
         .keys()
@@ -56,7 +56,7 @@ pub fn switch(name: &str, config: &mut Config, credentials: &Credentials) -> any
             credentials
                 .accounts
                 .iter()
-                .find(|(_, a)| a.display_name.eq_ignore_ascii_case(name))
+                .find(|(k, a)| effective_display(k, a).eq_ignore_ascii_case(name))
                 .map(|(k, _)| k.clone())
         });
 
