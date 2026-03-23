@@ -137,8 +137,17 @@ install() {
 }
 
 main() {
-    info "Doubleword CLI Installer"
-    echo ""
+    if [ -t 1 ]; then
+        echo ""
+        echo "  ╔══════════════════════════════════════╗"
+        echo "  ║     DOUBLEWORD BATCH INFERENCE       ║"
+        echo "  ║              CLI                     ║"
+        echo "  ╚══════════════════════════════════════╝"
+        echo ""
+    else
+        info "Doubleword CLI Installer"
+        echo ""
+    fi
 
     detect_platform
     get_latest_version
@@ -150,7 +159,7 @@ main() {
     echo ""
     info "Get started:"
     echo "  dw login              # Authenticate via browser"
-    echo "  dw login --api-key    # Authenticate with an API key"
+    echo "  dw login --api-key <KEY>  # Authenticate with an API key"
     echo "  dw examples list      # Browse example use-cases"
     echo "  dw --help             # See all commands"
     echo ""

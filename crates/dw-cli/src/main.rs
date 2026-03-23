@@ -11,6 +11,7 @@ use cli::{
 };
 use config::{ServerOverrides, build_client, load_config, load_credentials, resolve_account};
 use output::OutputFormat;
+use std::io::IsTerminal;
 
 #[tokio::main]
 async fn main() {
@@ -34,6 +35,19 @@ fn reset_sigpipe() {
 
 #[cfg(not(unix))]
 fn reset_sigpipe() {}
+
+/// Hint on first run when no accounts are stored.
+fn maybe_show_welcome(credentials: &config::Credentials) {
+    if !credentials.accounts.is_empty() {
+        return;
+    }
+    if !std::io::stderr().is_terminal() {
+        return;
+    }
+    eprintln!(
+        "Not logged in. Run `dw login` to authenticate or `dw login --api-key <KEY>` for headless setup."
+    );
+}
 
 async fn run() -> anyhow::Result<()> {
     let cli = cli::Cli::parse();
@@ -108,6 +122,7 @@ async fn run() -> anyhow::Result<()> {
 
         // --- Commands requiring authentication ---
         cmd => {
+            maybe_show_welcome(&credentials);
             let (_account_name, account) =
                 resolve_account(cli.account.as_deref(), &config, &credentials)
                     .map_err(|e| anyhow::anyhow!("{}", e))?;
