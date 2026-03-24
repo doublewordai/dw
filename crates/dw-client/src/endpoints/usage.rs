@@ -37,7 +37,7 @@ impl DwClient {
     }
 
     /// Get analytics for a specific batch (token counts, latency, cost).
-    /// Corresponds to `GET /ai/v1/batches/{batch_id}/analytics` (requires inference key).
+    /// Corresponds to `GET /v1/batches/{batch_id}/analytics` (requires inference key).
     pub async fn get_batch_analytics(&self, batch_id: &str) -> Result<BatchAnalytics, DwError> {
         let request = self.get(
             ApiSurface::Ai,
