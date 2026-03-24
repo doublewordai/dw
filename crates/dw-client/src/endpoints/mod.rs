@@ -3,5 +3,6 @@ pub mod files;
 pub mod keys;
 pub mod models;
 pub mod organizations;
+pub mod usage;
 pub mod users;
 pub mod webhooks;

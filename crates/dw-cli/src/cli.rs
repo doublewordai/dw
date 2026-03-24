@@ -82,6 +82,9 @@ pub enum Commands {
     /// Send a real-time inference request.
     Realtime(RealtimeArgs),
 
+    /// Show usage summary (tokens, cost, requests by model).
+    Usage(UsageArgs),
+
     /// Manage batch completion webhooks.
     #[command(subcommand)]
     Webhooks(WebhookCommands),
@@ -372,6 +375,11 @@ pub enum BatchCommands {
         #[arg(required = true)]
         ids: Vec<String>,
     },
+    /// Show analytics for a batch (tokens, latency, cost).
+    Analytics {
+        /// Batch ID.
+        id: String,
+    },
 }
 
 #[derive(clap::Args)]
@@ -513,4 +521,14 @@ pub enum ExampleCommands {
 pub struct CompletionsArgs {
     /// Shell to generate completions for.
     pub shell: clap_complete::Shell,
+}
+
+#[derive(clap::Args)]
+pub struct UsageArgs {
+    /// Start date (ISO 8601, e.g. 2026-03-01). Without dates, shows all-time usage.
+    #[arg(long)]
+    pub since: Option<String>,
+    /// End date (ISO 8601, e.g. 2026-03-31).
+    #[arg(long)]
+    pub until: Option<String>,
 }
