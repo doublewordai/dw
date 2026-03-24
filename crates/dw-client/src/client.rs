@@ -17,26 +17,46 @@ pub enum ApiSurface {
 
 /// Configuration for the Doubleword API client.
 ///
-/// Always construct with `..Default::default()` to be forward-compatible with new fields:
+/// Use the builder pattern to construct:
 /// ```ignore
-/// DwClientConfig { ai_base_url: "...".into(), ..Default::default() }
+/// let config = DwClientConfig::builder()
+///     .ai_base_url("https://api.example.com")
+///     .inference_key("sk-...")
+///     .build();
 /// ```
 #[derive(Debug, Clone)]
 pub struct DwClientConfig {
-    pub ai_base_url: String,
-    pub admin_base_url: String,
-    pub inference_key: Option<String>,
-    pub platform_key: Option<String>,
-    pub cli_version: String,
-    /// Total request timeout. Default: 300s (5 minutes).
-    pub timeout: Duration,
-    /// TCP connect timeout. Default: 10s.
-    pub connect_timeout: Duration,
-    /// Max retries on transient errors (429, 5xx, network). Default: 1.
-    pub max_retries: u32,
+    pub(crate) ai_base_url: String,
+    pub(crate) admin_base_url: String,
+    pub(crate) inference_key: Option<String>,
+    pub(crate) platform_key: Option<String>,
+    pub(crate) cli_version: String,
+    pub(crate) timeout: Duration,
+    pub(crate) connect_timeout: Duration,
+    pub(crate) max_retries: u32,
 }
 
-impl Default for DwClientConfig {
+impl DwClientConfig {
+    /// Create a new builder with sensible defaults.
+    pub fn builder() -> DwClientConfigBuilder {
+        DwClientConfigBuilder::default()
+    }
+}
+
+/// Builder for [`DwClientConfig`].
+#[derive(Debug, Clone)]
+pub struct DwClientConfigBuilder {
+    ai_base_url: String,
+    admin_base_url: String,
+    inference_key: Option<String>,
+    platform_key: Option<String>,
+    cli_version: String,
+    timeout: Duration,
+    connect_timeout: Duration,
+    max_retries: u32,
+}
+
+impl Default for DwClientConfigBuilder {
     fn default() -> Self {
         Self {
             ai_base_url: DEFAULT_AI_BASE_URL.to_string(),
@@ -47,6 +67,62 @@ impl Default for DwClientConfig {
             timeout: Duration::from_secs(300),
             connect_timeout: Duration::from_secs(10),
             max_retries: 1,
+        }
+    }
+}
+
+impl DwClientConfigBuilder {
+    pub fn ai_base_url(mut self, url: impl Into<String>) -> Self {
+        self.ai_base_url = url.into();
+        self
+    }
+
+    pub fn admin_base_url(mut self, url: impl Into<String>) -> Self {
+        self.admin_base_url = url.into();
+        self
+    }
+
+    pub fn inference_key(mut self, key: impl Into<String>) -> Self {
+        self.inference_key = Some(key.into());
+        self
+    }
+
+    pub fn platform_key(mut self, key: impl Into<String>) -> Self {
+        self.platform_key = Some(key.into());
+        self
+    }
+
+    pub fn cli_version(mut self, version: impl Into<String>) -> Self {
+        self.cli_version = version.into();
+        self
+    }
+
+    pub fn timeout(mut self, timeout: Duration) -> Self {
+        self.timeout = timeout;
+        self
+    }
+
+    pub fn connect_timeout(mut self, timeout: Duration) -> Self {
+        self.connect_timeout = timeout;
+        self
+    }
+
+    pub fn max_retries(mut self, retries: u32) -> Self {
+        self.max_retries = retries;
+        self
+    }
+
+    /// Build the configuration.
+    pub fn build(self) -> DwClientConfig {
+        DwClientConfig {
+            ai_base_url: self.ai_base_url,
+            admin_base_url: self.admin_base_url,
+            inference_key: self.inference_key,
+            platform_key: self.platform_key,
+            cli_version: self.cli_version,
+            timeout: self.timeout,
+            connect_timeout: self.connect_timeout,
+            max_retries: self.max_retries,
         }
     }
 }
@@ -84,10 +160,7 @@ impl DwClient {
 
     /// Create a client configured with just an inference key (e.g. for agent use).
     pub fn with_inference_key(key: String) -> Result<Self, DwError> {
-        Self::new(DwClientConfig {
-            inference_key: Some(key),
-            ..Default::default()
-        })
+        Self::new(DwClientConfig::builder().inference_key(key).build())
     }
 
     /// Get the base URL for a given API surface.

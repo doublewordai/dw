@@ -293,18 +293,25 @@ pub fn build_client(
 
     let client_config = config.client.as_ref().cloned().unwrap_or_default();
 
-    dw_client::DwClient::new(dw_client::DwClientConfig {
-        ai_base_url,
-        admin_base_url,
-        inference_key: account.inference_key.clone(),
-        platform_key: account.platform_key.clone(),
-        timeout: std::time::Duration::from_secs(client_config.effective_timeout_secs()),
-        connect_timeout: std::time::Duration::from_secs(
+    let mut builder = dw_client::DwClientConfig::builder()
+        .ai_base_url(ai_base_url)
+        .admin_base_url(admin_base_url)
+        .timeout(std::time::Duration::from_secs(
+            client_config.effective_timeout_secs(),
+        ))
+        .connect_timeout(std::time::Duration::from_secs(
             client_config.effective_connect_timeout_secs(),
-        ),
-        max_retries: client_config.max_retries,
-        ..Default::default()
-    })
+        ))
+        .max_retries(client_config.max_retries);
+
+    if let Some(ref key) = account.inference_key {
+        builder = builder.inference_key(key.clone());
+    }
+    if let Some(ref key) = account.platform_key {
+        builder = builder.platform_key(key.clone());
+    }
+
+    dw_client::DwClient::new(builder.build())
 }
 
 fn load_toml_file<T: serde::de::DeserializeOwned>(path: &Path) -> Option<T> {
