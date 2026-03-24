@@ -354,7 +354,7 @@ pub async fn watch_single(
     let max_retries = max_retries.min(10);
 
     loop {
-        let batch = match client.get_batch(batch_id).await {
+        let batch = match client.get_batch_once(batch_id).await {
             Ok(b) => {
                 consecutive_errors = 0;
                 b

@@ -247,7 +247,7 @@ async fn stream_loop(
         }
 
         // Fetch batch status — retry only transient errors
-        let batch = match client.get_batch(batch_id).await {
+        let batch = match client.get_batch_once(batch_id).await {
             Ok(b) => {
                 consecutive_errors = 0;
                 b

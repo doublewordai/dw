@@ -35,6 +35,13 @@ impl DwClient {
         self.send(req).await
     }
 
+    /// Get batch details without client-level retries.
+    /// Use this in polling loops that handle their own retry logic.
+    pub async fn get_batch_once(&self, batch_id: &str) -> Result<BatchResponse, DwError> {
+        let req = self.get(ApiSurface::Ai, &format!("/v1/batches/{}", batch_id))?;
+        self.send_once(req).await
+    }
+
     /// Cancel a batch.
     ///
     /// Corresponds to `POST /v1/batches/{batch_id}/cancel`.

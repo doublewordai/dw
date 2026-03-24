@@ -177,6 +177,20 @@ impl DwClient {
         Ok(response.json().await?)
     }
 
+    /// Send a request and parse the JSON response, without retries.
+    /// Use this in polling loops that handle their own retry logic.
+    pub async fn send_once<T: serde::de::DeserializeOwned>(
+        &self,
+        request: reqwest::RequestBuilder,
+    ) -> Result<T, DwError> {
+        let response = request.send().await?;
+        if response.status().is_success() {
+            Ok(response.json().await?)
+        } else {
+            Err(DwError::from_response(response).await)
+        }
+    }
+
     /// Send a request and return raw bytes (for file content downloads).
     /// Retries on transient errors (429, 5xx, network) up to `config.max_retries` times.
     pub async fn send_bytes(
