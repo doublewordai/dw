@@ -197,14 +197,14 @@ pub async fn list_requests(
                     entry
                         .fusillade_batch_id
                         .as_deref()
-                        .map(|id| id[..8].to_string())
+                        .map(|id| id.get(..8).unwrap_or(id).to_string())
                         .unwrap_or_else(|| "-".to_string()),
                 ]);
             }
 
             println!("{}", table);
 
-            if response.entries.len() as i64 == params.limit {
+            if response.entries.len() as u64 == params.limit {
                 eprintln!(
                     "\nMore results available. Next page: dw requests --skip {}",
                     params.skip + params.limit
@@ -226,11 +226,12 @@ fn format_tokens(n: i64) -> String {
     }
 }
 
-/// Truncate ISO timestamp to human-readable "YYYY-MM-DD HH:MM:SS".
+/// Truncate ISO timestamp to "YYYY-MM-DD HH:MM:SS" (strips fractional seconds and timezone).
 fn truncate_timestamp(ts: &str) -> String {
     ts.replace('T', " ")
         .split('.')
         .next()
         .unwrap_or(ts)
+        .trim_end_matches('Z')
         .to_string()
 }

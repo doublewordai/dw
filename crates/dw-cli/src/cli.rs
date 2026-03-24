@@ -539,11 +539,11 @@ pub struct UsageArgs {
 #[derive(clap::Args)]
 pub struct RequestsArgs {
     /// Maximum number of requests to return (default: 20, max: 100).
-    #[arg(long, short = 'n', default_value = "20")]
-    pub limit: i64,
+    #[arg(long, short = 'n', default_value = "20", value_parser = clap::value_parser!(u64).range(1..=100))]
+    pub limit: u64,
     /// Number of entries to skip (for pagination).
     #[arg(long, default_value = "0")]
-    pub skip: i64,
+    pub skip: u64,
     /// Filter by model name.
     #[arg(long, short = 'm')]
     pub model: Option<String>,

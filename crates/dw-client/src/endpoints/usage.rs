@@ -13,15 +13,29 @@ fn normalize_date(date: &str) -> String {
 }
 
 /// Parameters for listing requests.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct ListRequestsParams {
-    pub limit: i64,
-    pub skip: i64,
+    pub limit: u64,
+    pub skip: u64,
     pub model: Option<String>,
     pub since: Option<String>,
     pub until: Option<String>,
     pub batch_id: Option<String>,
     pub status_code: Option<i32>,
+}
+
+impl Default for ListRequestsParams {
+    fn default() -> Self {
+        Self {
+            limit: 20,
+            skip: 0,
+            model: None,
+            since: None,
+            until: None,
+            batch_id: None,
+            status_code: None,
+        }
+    }
 }
 
 impl DwClient {
