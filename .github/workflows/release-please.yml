@@ -107,7 +107,7 @@ jobs:
   publish-python:
     name: Publish Python Package
     needs: [release-please, publish-release]
-    if: ${{ needs.release-please.outputs.release_created }}
+    if: ${{ needs.release-please.outputs.release_created && secrets.PYPI_TOKEN != '' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
