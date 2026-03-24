@@ -86,7 +86,7 @@ impl DwClient {
     ///
     /// Does not use client-level retries (`send_with_retry`) — callers in polling
     /// loops handle their own retry logic. On 429, returns `DwError::RateLimited`
-    /// with the server-provided delay.
+    /// with a retry delay (server-provided when available, otherwise a default).
     pub async fn get_batch_results_page(
         &self,
         batch_id: &str,
