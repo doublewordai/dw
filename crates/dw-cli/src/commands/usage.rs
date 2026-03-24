@@ -153,15 +153,21 @@ pub async fn list_requests(
         OutputFormat::Plain => {
             for entry in &response.entries {
                 println!(
-                    "{}\t{}\t{}\t{}\t{}ms",
+                    "{}\t{}\t{}\t{}\t{}",
                     entry.timestamp,
                     entry.model.as_deref().unwrap_or("-"),
                     entry
                         .status_code
                         .map(|c| c.to_string())
                         .unwrap_or_else(|| "-".to_string()),
-                    format_tokens(entry.total_tokens.unwrap_or(0)),
-                    entry.duration_ms.unwrap_or(0),
+                    entry
+                        .total_tokens
+                        .map(format_tokens)
+                        .unwrap_or_else(|| "-".to_string()),
+                    entry
+                        .duration_ms
+                        .map(|d| format!("{}ms", d))
+                        .unwrap_or_else(|| "-".to_string()),
                 );
             }
         }
@@ -226,7 +232,9 @@ fn format_tokens(n: i64) -> String {
     }
 }
 
-/// Truncate ISO timestamp to "YYYY-MM-DD HH:MM:SS" (strips fractional seconds and timezone).
+/// Best-effort truncation of an ISO timestamp to "YYYY-MM-DD HH:MM:SS".
+/// Strips fractional seconds (splits on '.') and trailing 'Z'.
+/// Does not handle all timezone offset formats (e.g. +00:00 after fractional seconds).
 fn truncate_timestamp(ts: &str) -> String {
     ts.replace('T', " ")
         .split('.')
