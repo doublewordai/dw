@@ -53,7 +53,11 @@ pub async fn run() -> anyhow::Result<()> {
         .await?
         .error_for_status()
         .map_err(|e| {
-            anyhow::anyhow!("Download failed ({}): {}", e.status().unwrap_or_default(), e)
+            anyhow::anyhow!(
+                "Download failed ({}): {}",
+                e.status().unwrap_or_default(),
+                e
+            )
         })?
         .bytes()
         .await?;
