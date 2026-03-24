@@ -124,43 +124,60 @@ pub fn info() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Shell-escape a single argument for safe interpolation.
-fn shell_escape(arg: &str) -> String {
+/// Shell-escape a single argument (POSIX).
+fn shell_escape_posix(arg: &str) -> String {
     if arg.is_empty() {
         return "''".to_string();
     }
-    // If the arg contains no special chars, return as-is
     if arg
         .chars()
         .all(|c| c.is_alphanumeric() || c == '-' || c == '_' || c == '.' || c == '/' || c == ':')
     {
         return arg.to_string();
     }
-    // Wrap in single quotes, escaping embedded single quotes
     format!("'{}'", arg.replace('\'', "'\\''"))
+}
+
+/// Shell-escape a single argument (Windows cmd.exe).
+fn shell_escape_windows(arg: &str) -> String {
+    if arg.is_empty() {
+        return "\"\"".to_string();
+    }
+    if arg
+        .chars()
+        .all(|c| c.is_alphanumeric() || c == '-' || c == '_' || c == '.' || c == '/' || c == ':')
+    {
+        return arg.to_string();
+    }
+    // Wrap in double quotes, escape embedded double quotes
+    format!("\"{}\"", arg.replace('"', "\\\""))
 }
 
 /// Execute a shell command in the manifest's directory, appending escaped extra args.
 fn run_shell_command(cmd: &str, extra_args: &[String], cwd: &Path) -> anyhow::Result<()> {
-    let full_cmd = if extra_args.is_empty() {
-        cmd.to_string()
+    let (full_cmd, shell, shell_flag) = if cfg!(target_os = "windows") {
+        let escaped: Vec<String> = extra_args.iter().map(|a| shell_escape_windows(a)).collect();
+        let full = if escaped.is_empty() {
+            cmd.to_string()
+        } else {
+            format!("{} {}", cmd, escaped.join(" "))
+        };
+        (full, "cmd", "/C")
     } else {
-        let escaped: Vec<String> = extra_args.iter().map(|a| shell_escape(a)).collect();
-        format!("{} {}", cmd, escaped.join(" "))
+        let escaped: Vec<String> = extra_args.iter().map(|a| shell_escape_posix(a)).collect();
+        let full = if escaped.is_empty() {
+            cmd.to_string()
+        } else {
+            format!("{} {}", cmd, escaped.join(" "))
+        };
+        (full, "sh", "-c")
     };
 
-    let status = if cfg!(target_os = "windows") {
-        Command::new("cmd")
-            .args(["/C", &full_cmd])
-            .current_dir(cwd)
-            .status()
-    } else {
-        Command::new("sh")
-            .args(["-c", &full_cmd])
-            .current_dir(cwd)
-            .status()
-    }
-    .map_err(|e| anyhow::anyhow!("Failed to execute command: {}", e))?;
+    let status = Command::new(shell)
+        .args([shell_flag, &full_cmd])
+        .current_dir(cwd)
+        .status()
+        .map_err(|e| anyhow::anyhow!("Failed to execute command: {}", e))?;
 
     if !status.success() {
         anyhow::bail!(

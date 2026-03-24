@@ -367,6 +367,10 @@ pub fn sample(
     let mut rng = rand::rng();
 
     // Reservoir sampling: keep exactly `count` lines in memory
+    if count == 0 {
+        anyhow::bail!("Sample count must be at least 1.");
+    }
+
     let mut reservoir: Vec<String> = Vec::with_capacity(count);
     let mut total: usize = 0;
 
@@ -517,7 +521,7 @@ pub fn split(
 }
 
 /// Compare two JSONL result files by custom_id.
-/// Uses streaming for file B; file A must fit in memory for lookup.
+/// Both files are streamed line-by-line; only extracted content strings are stored in memory.
 pub fn diff(a: &std::path::Path, b: &std::path::Path, format: OutputFormat) -> anyhow::Result<()> {
     // Parse file into a map of custom_id → response content hash.
     // We only store the content string (not full Value) to reduce memory.
