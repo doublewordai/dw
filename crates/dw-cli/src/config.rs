@@ -11,6 +11,66 @@ pub struct Config {
     pub default_output: String,
     #[serde(default)]
     pub servers: Option<ServerConfig>,
+    #[serde(default)]
+    pub client: Option<ClientConfig>,
+}
+
+/// HTTP client settings.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ClientConfig {
+    /// Request timeout in seconds. Default: 300 (5 minutes).
+    #[serde(default = "default_timeout_secs")]
+    pub timeout_secs: u64,
+    /// Connect timeout in seconds. Default: 10.
+    #[serde(default = "default_connect_timeout_secs")]
+    pub connect_timeout_secs: u64,
+    /// Max retries on transient errors (network, 429, 5xx). Default: 1.
+    #[serde(default = "default_max_retries")]
+    pub max_retries: u32,
+    /// Polling interval in seconds for `watch` and `stream`. Default: 2. Minimum: 1.
+    #[serde(default = "default_poll_interval_secs")]
+    pub poll_interval_secs: u64,
+}
+
+impl ClientConfig {
+    /// Get poll interval, clamped to at least 1 second.
+    pub fn effective_poll_interval(&self) -> u64 {
+        self.poll_interval_secs.max(1)
+    }
+
+    /// Get request timeout, clamped to at least 1 second (0 would mean instant timeout).
+    pub fn effective_timeout_secs(&self) -> u64 {
+        self.timeout_secs.max(1)
+    }
+
+    /// Get connect timeout, clamped to at least 1 second.
+    pub fn effective_connect_timeout_secs(&self) -> u64 {
+        self.connect_timeout_secs.max(1)
+    }
+}
+
+fn default_timeout_secs() -> u64 {
+    300
+}
+fn default_connect_timeout_secs() -> u64 {
+    10
+}
+fn default_max_retries() -> u32 {
+    1
+}
+fn default_poll_interval_secs() -> u64 {
+    2
+}
+
+impl Default for ClientConfig {
+    fn default() -> Self {
+        Self {
+            timeout_secs: default_timeout_secs(),
+            connect_timeout_secs: default_connect_timeout_secs(),
+            max_retries: default_max_retries(),
+            poll_interval_secs: default_poll_interval_secs(),
+        }
+    }
 }
 
 fn default_output() -> String {
@@ -231,13 +291,27 @@ pub fn build_client(
         .map(|s| s.to_string())
         .unwrap_or(servers.admin);
 
-    dw_client::DwClient::new(dw_client::DwClientConfig {
-        ai_base_url,
-        admin_base_url,
-        inference_key: account.inference_key.clone(),
-        platform_key: account.platform_key.clone(),
-        ..Default::default()
-    })
+    let client_config = config.client.as_ref().cloned().unwrap_or_default();
+
+    let mut builder = dw_client::DwClientConfig::builder()
+        .ai_base_url(ai_base_url)
+        .admin_base_url(admin_base_url)
+        .timeout(std::time::Duration::from_secs(
+            client_config.effective_timeout_secs(),
+        ))
+        .connect_timeout(std::time::Duration::from_secs(
+            client_config.effective_connect_timeout_secs(),
+        ))
+        .max_retries(client_config.max_retries);
+
+    if let Some(ref key) = account.inference_key {
+        builder = builder.inference_key(key.clone());
+    }
+    if let Some(ref key) = account.platform_key {
+        builder = builder.platform_key(key.clone());
+    }
+
+    dw_client::DwClient::new(builder.build())
 }
 
 fn load_toml_file<T: serde::de::DeserializeOwned>(path: &Path) -> Option<T> {

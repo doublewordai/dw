@@ -35,7 +35,10 @@ pub enum DwError {
     NotFound { resource: String, id: String },
 
     /// Rate limited by the server.
-    #[error("Rate limited. Retry after {retry_after:?}s")]
+    #[error("Rate limited{}", match .retry_after {
+        Some(secs) => format!(". Retry after {}s", secs),
+        None => String::new(),
+    })]
     RateLimited { retry_after: Option<u64> },
 
     /// Request payload too large (e.g. file upload).
@@ -67,11 +70,11 @@ impl DwError {
     /// Whether this error is transient and worth retrying.
     ///
     /// Connection errors, timeouts, rate limits, and 5xx server errors are transient.
-    /// Auth errors, 4xx client errors, decode errors, and config errors are permanent.
+    /// Auth errors, 4xx client errors, decode errors, and request construction errors are permanent.
     pub fn is_transient(&self) -> bool {
         match self {
             DwError::RateLimited { .. } => true,
-            DwError::Network(e) => e.is_timeout() || e.is_connect() || e.is_request(),
+            DwError::Network(e) => e.is_timeout() || e.is_connect(),
             DwError::Api { status, .. } => *status >= 500,
             _ => false,
         }

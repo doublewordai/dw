@@ -180,6 +180,8 @@ pub async fn run(
     client: &DwClient,
     args: &BatchRunArgs,
     format: OutputFormat,
+    poll_interval_secs: u64,
+    max_retries: u32,
 ) -> anyhow::Result<()> {
     let paths = collect_jsonl_paths(&args.path)?;
 
@@ -251,7 +253,14 @@ pub async fn run(
             let batch_id = batch.id.clone();
             let multi_clone = multi.clone();
             watch_handles.push(tokio::spawn(async move {
-                watch_single(&client, &batch_id, multi_clone.as_ref()).await
+                watch_single(
+                    &client,
+                    &batch_id,
+                    multi_clone.as_ref(),
+                    poll_interval_secs,
+                    max_retries,
+                )
+                .await
             }));
         } else {
             print_item(&batch, format);
@@ -274,9 +283,14 @@ pub async fn run(
 }
 
 /// Watch one or more batches until completion with parallel progress bars.
-pub async fn watch_batches(client: &DwClient, batch_ids: &[String]) -> anyhow::Result<()> {
+pub async fn watch_batches(
+    client: &DwClient,
+    batch_ids: &[String],
+    poll_interval_secs: u64,
+    max_retries: u32,
+) -> anyhow::Result<()> {
     if batch_ids.len() == 1 {
-        return watch_single(client, &batch_ids[0], None).await;
+        return watch_single(client, &batch_ids[0], None, poll_interval_secs, max_retries).await;
     }
 
     let multi = indicatif::MultiProgress::new();
@@ -287,7 +301,14 @@ pub async fn watch_batches(client: &DwClient, batch_ids: &[String]) -> anyhow::R
         let batch_id = batch_id.clone();
         let multi = multi.clone();
         handles.push(tokio::spawn(async move {
-            watch_single(&client, &batch_id, Some(&multi)).await
+            watch_single(
+                &client,
+                &batch_id,
+                Some(&multi),
+                poll_interval_secs,
+                max_retries,
+            )
+            .await
         }));
     }
 
@@ -311,6 +332,8 @@ pub async fn watch_single(
     client: &DwClient,
     batch_id: &str,
     multi: Option<&indicatif::MultiProgress>,
+    poll_interval_secs: u64,
+    max_retries: u32,
 ) -> anyhow::Result<()> {
     use indicatif::{ProgressBar, ProgressStyle};
 
@@ -328,28 +351,36 @@ pub async fn watch_single(
     bar.set_message(format!("{} — waiting", batch_id));
 
     let mut consecutive_errors: u32 = 0;
-    const MAX_RETRIES: u32 = 3;
+    let max_retries = max_retries.min(10);
 
     loop {
-        let batch = match client.get_batch(batch_id).await {
+        let batch = match client.get_batch_once(batch_id).await {
             Ok(b) => {
                 consecutive_errors = 0;
                 b
             }
             Err(e) if e.is_transient() => {
                 consecutive_errors += 1;
-                if consecutive_errors > MAX_RETRIES {
+                if consecutive_errors > max_retries {
                     bar.abandon_with_message(format!("{} — connection lost", batch_id));
                     anyhow::bail!(
                         "Lost connection to server after {} retries: {}",
-                        MAX_RETRIES,
+                        max_retries,
                         e
                     );
                 }
-                let delay = 2u64.pow(consecutive_errors);
+                // Honor server-provided retry_after for rate limits, else backoff
+                let delay = if let dw_client::DwError::RateLimited {
+                    retry_after: Some(secs),
+                } = &e
+                {
+                    *secs
+                } else {
+                    2u64.saturating_pow(consecutive_errors).min(60)
+                };
                 bar.set_message(format!(
                     "{} — retrying ({}/{})",
-                    batch_id, consecutive_errors, MAX_RETRIES
+                    batch_id, consecutive_errors, max_retries
                 ));
                 tokio::time::sleep(Duration::from_secs(delay)).await;
                 continue;
@@ -390,7 +421,7 @@ pub async fn watch_single(
             }
         }
 
-        tokio::time::sleep(Duration::from_secs(2)).await;
+        tokio::time::sleep(Duration::from_secs(poll_interval_secs)).await;
     }
 }
 

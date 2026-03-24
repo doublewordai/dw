@@ -13,7 +13,12 @@ use crate::jsonl;
 /// For multiple files: each batch starts streaming as soon as it's created —
 /// uploads and streaming run concurrently (pipelined). Results from all
 /// batches interleave into a single stdout output.
-pub async fn run(client: &DwClient, args: &StreamArgs) -> anyhow::Result<()> {
+pub async fn run(
+    client: &DwClient,
+    args: &StreamArgs,
+    poll_interval_secs: u64,
+    max_retries: u32,
+) -> anyhow::Result<()> {
     let paths = collect_jsonl_paths(&args.path)?;
 
     if paths.is_empty() {
@@ -23,7 +28,7 @@ pub async fn run(client: &DwClient, args: &StreamArgs) -> anyhow::Result<()> {
     if paths.len() == 1 {
         // Single file: simple sequential flow
         let batch_id = upload_and_create(client, &paths[0], args, None).await?;
-        return stream_single(client, &batch_id).await;
+        return stream_single(client, &batch_id, poll_interval_secs, max_retries).await;
     }
 
     // Multiple files: pipeline uploads with concurrent streaming.
@@ -39,7 +44,15 @@ pub async fn run(client: &DwClient, args: &StreamArgs) -> anyhow::Result<()> {
         let mp = multi.clone();
         let stdout = stdout.clone();
         stream_handles.push(tokio::spawn(async move {
-            stream_with_multi(&client, &batch_id, &mp, &stdout).await
+            stream_with_multi(
+                &client,
+                &batch_id,
+                &mp,
+                &stdout,
+                poll_interval_secs,
+                max_retries,
+            )
+            .await
         }));
     }
 
@@ -117,7 +130,12 @@ async fn upload_and_create(
 }
 
 /// Stream results from a single batch with a standalone progress bar.
-async fn stream_single(client: &DwClient, batch_id: &str) -> anyhow::Result<()> {
+async fn stream_single(
+    client: &DwClient,
+    batch_id: &str,
+    poll_interval_secs: u64,
+    max_retries: u32,
+) -> anyhow::Result<()> {
     let bar = ProgressBar::new(0);
     bar.set_style(
         ProgressStyle::default_bar()
@@ -132,6 +150,8 @@ async fn stream_single(client: &DwClient, batch_id: &str) -> anyhow::Result<()> 
         batch_id,
         &bar,
         &tokio::sync::Mutex::new(std::io::stdout()),
+        poll_interval_secs,
+        max_retries,
     )
     .await
 }
@@ -142,6 +162,8 @@ async fn stream_with_multi(
     batch_id: &str,
     multi: &MultiProgress,
     stdout: &tokio::sync::Mutex<std::io::Stdout>,
+    poll_interval_secs: u64,
+    max_retries: u32,
 ) -> anyhow::Result<()> {
     let bar = multi.add(ProgressBar::new(0));
     bar.set_style(
@@ -152,21 +174,32 @@ async fn stream_with_multi(
     );
     bar.set_message(format!("{} — streaming", batch_id));
 
-    stream_loop(client, batch_id, &bar, stdout).await
+    stream_loop(
+        client,
+        batch_id,
+        &bar,
+        stdout,
+        poll_interval_secs,
+        max_retries,
+    )
+    .await
 }
 
 /// Core streaming loop: poll for completed results and write to stdout.
-/// Retries transient network errors up to 3 times with exponential backoff.
+/// Retries transient network errors with exponential backoff.
 async fn stream_loop(
     client: &DwClient,
     batch_id: &str,
     bar: &ProgressBar,
     stdout: &tokio::sync::Mutex<std::io::Stdout>,
+    poll_interval_secs: u64,
+    max_retries: u32,
 ) -> anyhow::Result<()> {
     let mut cursor: usize = 0;
     let page_size: usize = 100;
     let mut consecutive_errors: u32 = 0;
-    const MAX_RETRIES: u32 = 3;
+    // Clamp to sane range; 0 means no retries for polling errors
+    let max_retries = max_retries.min(10);
 
     loop {
         // Fetch results page — retry only transient errors
@@ -180,14 +213,21 @@ async fn stream_loop(
             }
             Err(e) if e.is_transient() => {
                 consecutive_errors += 1;
-                if consecutive_errors > MAX_RETRIES {
+                if consecutive_errors > max_retries {
                     bar.abandon_with_message(format!("{} — connection lost", batch_id));
-                    anyhow::bail!("Lost connection after {} retries: {}", MAX_RETRIES, e);
+                    anyhow::bail!("Lost connection after {} retries: {}", max_retries, e);
                 }
-                let delay = 2u64.pow(consecutive_errors);
+                let delay = if let dw_client::DwError::RateLimited {
+                    retry_after: Some(secs),
+                } = &e
+                {
+                    *secs
+                } else {
+                    2u64.saturating_pow(consecutive_errors).min(60)
+                };
                 bar.set_message(format!(
                     "{} — retrying ({}/{})",
-                    batch_id, consecutive_errors, MAX_RETRIES
+                    batch_id, consecutive_errors, max_retries
                 ));
                 tokio::time::sleep(Duration::from_secs(delay)).await;
                 continue;
@@ -207,21 +247,28 @@ async fn stream_loop(
         }
 
         // Fetch batch status — retry only transient errors
-        let batch = match client.get_batch(batch_id).await {
+        let batch = match client.get_batch_once(batch_id).await {
             Ok(b) => {
                 consecutive_errors = 0;
                 b
             }
             Err(e) if e.is_transient() => {
                 consecutive_errors += 1;
-                if consecutive_errors > MAX_RETRIES {
+                if consecutive_errors > max_retries {
                     bar.abandon_with_message(format!("{} — connection lost", batch_id));
-                    anyhow::bail!("Lost connection after {} retries: {}", MAX_RETRIES, e);
+                    anyhow::bail!("Lost connection after {} retries: {}", max_retries, e);
                 }
-                let delay = 2u64.pow(consecutive_errors);
+                let delay = if let dw_client::DwError::RateLimited {
+                    retry_after: Some(secs),
+                } = &e
+                {
+                    *secs
+                } else {
+                    2u64.saturating_pow(consecutive_errors).min(60)
+                };
                 bar.set_message(format!(
                     "{} — retrying ({}/{})",
-                    batch_id, consecutive_errors, MAX_RETRIES
+                    batch_id, consecutive_errors, max_retries
                 ));
                 tokio::time::sleep(Duration::from_secs(delay)).await;
                 continue;
@@ -247,11 +294,43 @@ async fn stream_loop(
         }
 
         if batch.is_terminal() {
-            // Drain remaining results
+            // Drain remaining results with transient retry
+            let mut drain_errors: u32 = 0;
             loop {
-                let final_page = client
+                let final_page = match client
                     .get_batch_results_page(batch_id, cursor, page_size, Some("completed"))
-                    .await?;
+                    .await
+                {
+                    Ok(p) => {
+                        drain_errors = 0;
+                        p
+                    }
+                    Err(e) if e.is_transient() => {
+                        drain_errors += 1;
+                        if drain_errors > max_retries {
+                            bar.abandon_with_message(format!("{} — drain failed", batch_id));
+                            anyhow::bail!(
+                                "Failed to drain results after {} retries: {}",
+                                max_retries,
+                                e
+                            );
+                        }
+                        let delay = if let dw_client::DwError::RateLimited {
+                            retry_after: Some(secs),
+                        } = &e
+                        {
+                            *secs
+                        } else {
+                            2u64.saturating_pow(drain_errors).min(60)
+                        };
+                        tokio::time::sleep(Duration::from_secs(delay)).await;
+                        continue;
+                    }
+                    Err(e) => {
+                        bar.abandon_with_message(format!("{} — error", batch_id));
+                        return Err(e.into());
+                    }
+                };
                 if !final_page.body.is_empty() {
                     let mut out = stdout.lock().await;
                     out.write_all(final_page.body.as_bytes())?;
@@ -272,7 +351,7 @@ async fn stream_loop(
             return Ok(());
         }
 
-        tokio::time::sleep(Duration::from_secs(2)).await;
+        tokio::time::sleep(Duration::from_secs(poll_interval_secs)).await;
     }
 }
 
