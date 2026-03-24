@@ -103,9 +103,12 @@ dw stream batch.jsonl > results.jsonl
 | `dw config *` / `dw account *` (local) | Yes | Yes |
 | `dw models list / get` | Yes | — |
 | `dw whoami` | Yes | — |
+| `dw keys *` | Yes | — |
 | `dw webhooks *` | Yes | — |
+| `dw usage` | Yes | — |
+| `dw requests` | Yes | — (requires RequestViewer role) |
 
-A typical setup: you (the developer) run `dw login` to set up your account and browse models. Then you create an inference API key from the dashboard and hand it to your agent or CI pipeline with `dw login --api-key`.
+A typical setup: you (the developer) run `dw login` to set up your account and browse models. Then create an API key with `dw keys create --name "my-bot"` and hand it to your agent or CI pipeline with `dw login --api-key`.
 
 ## Configuration
 
@@ -336,6 +339,18 @@ dw webhooks list
 dw webhooks delete <webhook-id>
 dw webhooks rotate-secret <webhook-id>
 ```
+
+### API Keys
+
+Create and manage API keys for scripts, bots, and integrations.
+
+```bash
+dw keys create --name "my-bot"          # Create a key (secret shown once)
+dw keys list                            # List your keys (secrets masked)
+dw keys delete <key-id>                 # Revoke a key
+```
+
+Created keys are `realtime` purpose — use them with the OpenAI SDK or `dw login --api-key`.
 
 ### Examples
 
