@@ -14,6 +14,18 @@ fn http_client() -> anyhow::Result<reqwest::Client> {
         .build()?)
 }
 
+/// Format an HTTP error with status code (or "network error" if no status).
+fn format_http_error(e: &reqwest::Error) -> String {
+    match e.status() {
+        Some(status) => format!(
+            "{} {}",
+            status.as_u16(),
+            status.canonical_reason().unwrap_or("Unknown")
+        ),
+        None => "network error".to_string(),
+    }
+}
+
 /// Self-update to the latest release.
 pub async fn run() -> anyhow::Result<()> {
     eprintln!("Current version: {}", CURRENT_VERSION);
@@ -52,13 +64,7 @@ pub async fn run() -> anyhow::Result<()> {
         .send()
         .await?
         .error_for_status()
-        .map_err(|e| {
-            anyhow::anyhow!(
-                "Download failed ({}): {}",
-                e.status().unwrap_or_default(),
-                e
-            )
-        })?
+        .map_err(|e| anyhow::anyhow!("Download failed ({}): {}", format_http_error(&e), e))?
         .bytes()
         .await?;
 
@@ -72,17 +78,24 @@ pub async fn run() -> anyhow::Result<()> {
         .map_err(|e| {
             anyhow::anyhow!(
                 "Could not download checksums ({}): {}",
-                e.status().unwrap_or_default(),
+                format_http_error(&e),
                 e
             )
         })?
         .text()
         .await?;
 
+    // Parse checksums as "hash  filename" pairs, match exact filename
     let expected = checksums_text
         .lines()
-        .find(|line| line.contains(&artifact))
-        .and_then(|line| line.split_whitespace().next())
+        .filter_map(|line| {
+            let mut parts = line.split_whitespace();
+            let hash = parts.next()?;
+            let filename = parts.next()?;
+            Some((hash, filename))
+        })
+        .find(|(_, filename)| *filename == artifact)
+        .map(|(hash, _)| hash)
         .ok_or_else(|| anyhow::anyhow!("Checksum not found for {}", artifact))?;
 
     let mut hasher = Sha256::new();
@@ -101,8 +114,14 @@ pub async fn run() -> anyhow::Result<()> {
     let current_exe = std::env::current_exe()?;
     let temp_path = current_exe.with_extension("new");
 
-    // Write to temp file
-    let mut file = std::fs::File::create(&temp_path)?;
+    // Write to temp file next to the current binary
+    let mut file = std::fs::File::create(&temp_path).map_err(|e| {
+        anyhow::anyhow!(
+            "Could not write to {}: {}. Try running with sudo or reinstalling.",
+            temp_path.display(),
+            e
+        )
+    })?;
     file.write_all(&binary)?;
     file.flush()?;
     drop(file);
@@ -116,7 +135,6 @@ pub async fn run() -> anyhow::Result<()> {
 
     // Atomic rename over the current binary
     std::fs::rename(&temp_path, &current_exe).map_err(|e| {
-        // Clean up temp file on failure
         let _ = std::fs::remove_file(&temp_path);
         anyhow::anyhow!(
             "Could not replace binary at {}: {}. Try running with sudo or reinstalling.",
@@ -141,7 +159,7 @@ async fn fetch_latest_version(client: &reqwest::Client) -> anyhow::Result<String
         .map_err(|e| {
             anyhow::anyhow!(
                 "Could not check for updates ({}): {}",
-                e.status().unwrap_or_default(),
+                format_http_error(&e),
                 e
             )
         })?
