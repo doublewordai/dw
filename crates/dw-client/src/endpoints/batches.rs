@@ -83,6 +83,10 @@ impl DwClient {
     /// and the offset of the last line returned (`X-Last-Line`).
     ///
     /// Corresponds to `GET /v1/batches/{batch_id}/results?skip=N&limit=M&status=S`.
+    ///
+    /// Does not use client-level retries (`send_with_retry`) — callers in polling
+    /// loops handle their own retry logic. On 429, returns `DwError::RateLimited`
+    /// with the server-provided delay.
     pub async fn get_batch_results_page(
         &self,
         batch_id: &str,

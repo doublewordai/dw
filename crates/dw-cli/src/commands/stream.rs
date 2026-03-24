@@ -294,11 +294,43 @@ async fn stream_loop(
         }
 
         if batch.is_terminal() {
-            // Drain remaining results
+            // Drain remaining results with transient retry
+            let mut drain_errors: u32 = 0;
             loop {
-                let final_page = client
+                let final_page = match client
                     .get_batch_results_page(batch_id, cursor, page_size, Some("completed"))
-                    .await?;
+                    .await
+                {
+                    Ok(p) => {
+                        drain_errors = 0;
+                        p
+                    }
+                    Err(e) if e.is_transient() => {
+                        drain_errors += 1;
+                        if drain_errors > max_retries {
+                            bar.abandon_with_message(format!("{} — drain failed", batch_id));
+                            anyhow::bail!(
+                                "Failed to drain results after {} retries: {}",
+                                max_retries,
+                                e
+                            );
+                        }
+                        let delay = if let dw_client::DwError::RateLimited {
+                            retry_after: Some(secs),
+                        } = &e
+                        {
+                            *secs
+                        } else {
+                            2u64.saturating_pow(drain_errors).min(60)
+                        };
+                        tokio::time::sleep(Duration::from_secs(delay)).await;
+                        continue;
+                    }
+                    Err(e) => {
+                        bar.abandon_with_message(format!("{} — error", batch_id));
+                        return Err(e.into());
+                    }
+                };
                 if !final_page.body.is_empty() {
                     let mut out = stdout.lock().await;
                     out.write_all(final_page.body.as_bytes())?;
