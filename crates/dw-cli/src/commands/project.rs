@@ -149,8 +149,8 @@ fn shell_escape_windows(arg: &str) -> String {
     {
         return arg.to_string();
     }
-    // Wrap in double quotes, escape embedded double quotes
-    format!("\"{}\"", arg.replace('"', "\\\""))
+    // Wrap in double quotes, double any embedded quotes (cmd.exe convention)
+    format!("\"{}\"", arg.replace('"', "\"\""))
 }
 
 /// Execute a shell command in the manifest's directory, appending escaped extra args.

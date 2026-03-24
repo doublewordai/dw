@@ -280,7 +280,7 @@ pub fn stats(path: &std::path::Path, format: OutputFormat) -> anyhow::Result<()>
     let reader = std::io::BufReader::new(file);
 
     let mut line_count: usize = 0;
-    let mut models: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+    let mut models: std::collections::BTreeMap<String, usize> = std::collections::BTreeMap::new();
     let mut total_prompt_chars: usize = 0;
     let mut errors: usize = 0;
 
@@ -405,9 +405,9 @@ pub fn sample(
     }
 
     let mut writer: Box<dyn IoWrite> = if let Some(out_path) = output {
-        Box::new(std::fs::File::create(out_path)?)
+        Box::new(std::io::BufWriter::new(std::fs::File::create(out_path)?))
     } else {
-        Box::new(std::io::stdout())
+        Box::new(std::io::BufWriter::new(std::io::stdout().lock()))
     };
 
     for line in &reservoir {
@@ -429,9 +429,9 @@ pub fn sample(
 /// Merge multiple JSONL files into one (streaming).
 pub fn merge(paths: &[std::path::PathBuf], output: Option<&std::path::Path>) -> anyhow::Result<()> {
     let mut writer: Box<dyn IoWrite> = if let Some(out_path) = output {
-        Box::new(std::fs::File::create(out_path)?)
+        Box::new(std::io::BufWriter::new(std::fs::File::create(out_path)?))
     } else {
-        Box::new(std::io::stdout())
+        Box::new(std::io::BufWriter::new(std::io::stdout().lock()))
     };
 
     let mut total_lines = 0;
@@ -533,18 +533,18 @@ pub fn split(
 /// Compare two JSONL result files by custom_id.
 /// Both files are streamed line-by-line; only a content hash (u64) is stored per entry.
 pub fn diff(a: &std::path::Path, b: &std::path::Path, format: OutputFormat) -> anyhow::Result<()> {
-    use std::hash::{Hash, Hasher};
+    use sha2::{Digest, Sha256};
 
-    /// Hash the response content to a u64 for memory-efficient comparison.
-    fn content_hash(val: &serde_json::Value) -> u64 {
-        let mut hasher = std::hash::DefaultHasher::new();
-        extract_content(val).hash(&mut hasher);
-        hasher.finish()
+    /// SHA-256 hash of the response content for reliable comparison.
+    fn content_hash(val: &serde_json::Value) -> [u8; 32] {
+        let mut hasher = Sha256::new();
+        hasher.update(extract_content(val).as_bytes());
+        hasher.finalize().into()
     }
 
-    // Parse file into a map of custom_id → content hash.
+    // Parse file into a map of custom_id → content SHA-256 hash.
     let parse_file =
-        |path: &std::path::Path| -> anyhow::Result<std::collections::HashMap<String, u64>> {
+        |path: &std::path::Path| -> anyhow::Result<std::collections::HashMap<String, [u8; 32]>> {
             let file = std::fs::File::open(path)?;
             let reader = std::io::BufReader::new(file);
             let mut map = std::collections::HashMap::new();
@@ -645,15 +645,25 @@ pub fn diff(a: &std::path::Path, b: &std::path::Path, format: OutputFormat) -> a
 }
 
 /// Extract response content string for comparison.
-fn extract_content(val: &serde_json::Value) -> Option<String> {
-    val.get("response")
+/// Extract response content as a canonical string for hashing.
+/// Handles both string content and multimodal array content.
+fn extract_content(val: &serde_json::Value) -> String {
+    let content = val
+        .get("response")
         .and_then(|r| r.get("body"))
         .and_then(|b| b.get("choices"))
         .and_then(|c| c.get(0))
         .and_then(|c| c.get("message"))
-        .and_then(|m| m.get("content"))
-        .and_then(|c| c.as_str())
-        .map(|s| s.to_string())
+        .and_then(|m| m.get("content"));
+
+    match content {
+        Some(c) if c.is_string() => c.as_str().unwrap_or("").to_string(),
+        Some(c) => {
+            // Multimodal or non-string content: use canonical JSON representation
+            serde_json::to_string(c).unwrap_or_default()
+        }
+        None => String::new(),
+    }
 }
 
 fn format_number(n: usize) -> String {

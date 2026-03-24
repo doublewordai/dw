@@ -277,7 +277,7 @@ pub enum FileCommands {
     Sample {
         /// Path to JSONL file.
         path: PathBuf,
-        /// Number of lines to sample.
+        /// Number of lines to sample (required, >= 1).
         #[arg(long, short = 'n')]
         count: usize,
         /// Output file (default: stdout).
