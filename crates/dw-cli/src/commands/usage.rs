@@ -195,7 +195,10 @@ pub async fn list_requests(
                         .status_code
                         .map(|c| c.to_string())
                         .unwrap_or_else(|| "-".to_string()),
-                    format_tokens(entry.total_tokens.unwrap_or(0)),
+                    entry
+                        .total_tokens
+                        .map(format_tokens)
+                        .unwrap_or_else(|| "-".to_string()),
                     entry
                         .duration_ms
                         .map(|d| format!("{}ms", d))
