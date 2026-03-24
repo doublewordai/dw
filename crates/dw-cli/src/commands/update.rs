@@ -1,15 +1,27 @@
 use sha2::{Digest, Sha256};
 use std::io::Write;
+use std::time::Duration;
 
 const REPO: &str = "doublewordai/dw";
 const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// Build a shared HTTP client with timeouts for update operations.
+fn http_client() -> anyhow::Result<reqwest::Client> {
+    Ok(reqwest::Client::builder()
+        .user_agent("dw-cli")
+        .timeout(Duration::from_secs(120))
+        .connect_timeout(Duration::from_secs(10))
+        .build()?)
+}
 
 /// Self-update to the latest release.
 pub async fn run() -> anyhow::Result<()> {
     eprintln!("Current version: {}", CURRENT_VERSION);
     eprintln!("Checking for updates...");
 
-    let latest = fetch_latest_version().await?;
+    let client = http_client()?;
+
+    let latest = fetch_latest_version(&client).await?;
     let latest_clean = latest.trim_start_matches('v');
 
     if latest_clean == CURRENT_VERSION {
@@ -35,18 +47,13 @@ pub async fn run() -> anyhow::Result<()> {
 
     // Download binary
     eprintln!("Downloading {}...", artifact);
-    let client = reqwest::Client::new();
     let binary = client
         .get(&download_url)
         .send()
         .await?
         .error_for_status()
         .map_err(|e| {
-            anyhow::anyhow!(
-                "Download failed: {}. Check https://github.com/{}/releases",
-                e,
-                REPO
-            )
+            anyhow::anyhow!("Download failed ({}): {}", e.status().unwrap_or_default(), e)
         })?
         .bytes()
         .await?;
@@ -58,7 +65,13 @@ pub async fn run() -> anyhow::Result<()> {
         .send()
         .await?
         .error_for_status()
-        .map_err(|_| anyhow::anyhow!("Could not download checksums"))?
+        .map_err(|e| {
+            anyhow::anyhow!(
+                "Could not download checksums ({}): {}",
+                e.status().unwrap_or_default(),
+                e
+            )
+        })?
         .text()
         .await?;
 
@@ -112,9 +125,7 @@ pub async fn run() -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn fetch_latest_version() -> anyhow::Result<String> {
-    let client = reqwest::Client::builder().user_agent("dw-cli").build()?;
-
+async fn fetch_latest_version(client: &reqwest::Client) -> anyhow::Result<String> {
     let response: serde_json::Value = client
         .get(format!(
             "https://api.github.com/repos/{}/releases/latest",
@@ -123,10 +134,11 @@ async fn fetch_latest_version() -> anyhow::Result<String> {
         .send()
         .await?
         .error_for_status()
-        .map_err(|_| {
+        .map_err(|e| {
             anyhow::anyhow!(
-                "Could not check for updates. Check https://github.com/{}/releases",
-                REPO
+                "Could not check for updates ({}): {}",
+                e.status().unwrap_or_default(),
+                e
             )
         })?
         .json()
@@ -135,7 +147,7 @@ async fn fetch_latest_version() -> anyhow::Result<String> {
     response["tag_name"]
         .as_str()
         .map(|s| s.to_string())
-        .ok_or_else(|| anyhow::anyhow!("Could not parse latest version"))
+        .ok_or_else(|| anyhow::anyhow!("Could not parse latest version from GitHub API response"))
 }
 
 fn detect_platform() -> anyhow::Result<String> {
