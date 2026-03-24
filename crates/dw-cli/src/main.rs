@@ -7,7 +7,7 @@ mod output;
 use clap::Parser;
 use cli::{
     AccountCommands, BatchCommands, Commands, ConfigCommands, ExampleCommands, FileCommands,
-    KeyCommands, ModelCommands, WebhookCommands,
+    KeyCommands, ModelCommands, ProjectCommands, WebhookCommands,
 };
 use config::{ServerOverrides, build_client, load_config, load_credentials, resolve_account};
 use output::OutputFormat;
@@ -76,6 +76,11 @@ async fn run() -> anyhow::Result<()> {
             Ok(())
         }
         Commands::Update => commands::update::run().await,
+        Commands::Project(subcmd) => match subcmd {
+            ProjectCommands::Setup => commands::project::setup(),
+            ProjectCommands::Run { step, args } => commands::project::run(&step, &args),
+            ProjectCommands::Info => commands::project::info(),
+        },
         Commands::Examples(subcmd) => match subcmd {
             ExampleCommands::List => {
                 commands::examples::list();
@@ -186,6 +191,21 @@ async fn run() -> anyhow::Result<()> {
                     }
                     FileCommands::Validate { path } => commands::files::validate(&path),
                     FileCommands::Prepare(args) => commands::files::prepare(&args).await,
+                    FileCommands::Stats { path } => commands::files::stats(&path, format),
+                    FileCommands::Sample {
+                        path,
+                        count,
+                        output_file,
+                    } => commands::files::sample(&path, count, output_file.as_deref()),
+                    FileCommands::Merge { paths, output_file } => {
+                        commands::files::merge(&paths, output_file.as_deref())
+                    }
+                    FileCommands::Split {
+                        path,
+                        chunk_size,
+                        output_dir,
+                    } => commands::files::split(&path, chunk_size, output_dir.as_deref()),
+                    FileCommands::Diff { a, b } => commands::files::diff(&a, &b, format),
                 },
 
                 Commands::Batches(subcmd) => match subcmd {
@@ -289,7 +309,8 @@ async fn run() -> anyhow::Result<()> {
                 | Commands::Config(_)
                 | Commands::Examples(_)
                 | Commands::Completions(_)
-                | Commands::Update => unreachable!(),
+                | Commands::Update
+                | Commands::Project(_) => unreachable!(),
             }
         }
     }

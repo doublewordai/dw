@@ -268,6 +268,25 @@ dw files validate batch.jsonl
 
 Transforms can also be applied inline during upload: `dw files upload batch.jsonl --model Qwen3-30B`.
 
+#### JSONL Inspection & Manipulation
+
+```bash
+# Inspect a batch file before submitting
+dw files stats batch.jsonl                        # Line count, models, estimated tokens
+
+# Sample a subset for testing
+dw files sample batch.jsonl -n 50 -o test.jsonl   # Random 50 lines
+
+# Merge multiple files
+dw files merge batch-a.jsonl batch-b.jsonl -o combined.jsonl
+
+# Split a large file into chunks
+dw files split large.jsonl --chunk-size 1000       # → large-001.jsonl, large-002.jsonl, ...
+
+# Compare results from two models
+dw files diff results-30b.jsonl results-235b.jsonl
+```
+
 ### Batches
 
 ```bash
@@ -363,6 +382,30 @@ dw examples clone model-evals --dir ./my-evals   # Clone to custom directory
 ```
 
 Each example includes working code, sample data, and a README with results and costs.
+
+### Project Steps
+
+When inside a cloned example (or any project with a `dw.toml`), run project-specific steps:
+
+```bash
+dw project setup                                 # Install dependencies (e.g. uv sync)
+dw project info                                  # Show available steps
+dw project run prepare --model 30b -n 100        # Run a named step with args
+dw project run analyze --results results.jsonl   # Run another step
+```
+
+A typical example workflow:
+
+```bash
+dw examples clone model-evals && cd model-evals
+dw project setup
+dw project run prepare -n 100                    # Python generates batch JSONL
+dw files stats output/batch.jsonl                # Inspect before submitting
+dw files prepare output/batch.jsonl --model Qwen/Qwen3-VL-30B-A3B-Instruct-FP8
+dw stream output/batch.jsonl > results.jsonl     # Submit, watch, stream results
+dw project run analyze --results results.jsonl   # Score/analyze results
+dw usage                                         # See what it cost
+```
 
 ## Global Flags
 
