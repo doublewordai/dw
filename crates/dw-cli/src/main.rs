@@ -7,7 +7,7 @@ mod output;
 use clap::Parser;
 use cli::{
     AccountCommands, BatchCommands, Commands, ConfigCommands, ExampleCommands, FileCommands,
-    ModelCommands, WebhookCommands,
+    KeyCommands, ModelCommands, WebhookCommands,
 };
 use config::{ServerOverrides, build_client, load_config, load_credentials, resolve_account};
 use output::OutputFormat;
@@ -230,6 +230,18 @@ async fn run() -> anyhow::Result<()> {
                 Commands::Realtime(args) => commands::realtime::run(&client, &args).await,
 
                 Commands::Usage(args) => commands::usage::run(&client, &args, format).await,
+
+                Commands::Keys(subcmd) => match subcmd {
+                    KeyCommands::Create { name, description } => {
+                        commands::keys::create(&client, &name, description.as_deref(), format).await
+                    }
+                    KeyCommands::List { limit, skip } => {
+                        commands::keys::list(&client, limit, skip, format).await
+                    }
+                    KeyCommands::Delete { id, yes } => {
+                        commands::keys::delete(&client, &id, yes).await
+                    }
+                },
 
                 Commands::Webhooks(subcmd) => match subcmd {
                     WebhookCommands::Create {

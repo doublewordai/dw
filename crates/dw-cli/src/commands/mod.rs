@@ -4,6 +4,7 @@ pub mod batches;
 pub mod config;
 pub mod examples;
 pub mod files;
+pub mod keys;
 pub mod models;
 pub mod realtime;
 pub mod stream;

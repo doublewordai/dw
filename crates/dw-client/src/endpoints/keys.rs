@@ -1,28 +1,36 @@
 use crate::client::{ApiSurface, DwClient};
 use crate::error::DwError;
-use crate::types::keys::ApiKeyResponse;
+use crate::types::keys::{ApiKeyResponse, CreateApiKeyRequest, PaginatedApiKeys};
 
 impl DwClient {
-    /// List API keys for a user.
-    ///
-    /// Corresponds to `GET /admin/api/v1/users/{user_id}/api-keys`.
-    /// Requires a platform key.
-    pub async fn list_api_keys(&self, user_id: &str) -> Result<Vec<ApiKeyResponse>, DwError> {
-        let req = self.get(
-            ApiSurface::Admin,
-            &format!("/admin/api/v1/users/{}/api-keys", user_id),
-        )?;
+    /// Create an API key for the current user.
+    /// Corresponds to `POST /admin/api/v1/users/current/api-keys` (requires platform key).
+    /// Returns the full key response including the secret (shown only once).
+    pub async fn create_api_key(
+        &self,
+        request: &CreateApiKeyRequest,
+    ) -> Result<ApiKeyResponse, DwError> {
+        let req = self
+            .post(ApiSurface::Admin, "/admin/api/v1/users/current/api-keys")?
+            .json(request);
         self.send(req).await
     }
 
-    /// Delete an API key.
-    ///
-    /// Corresponds to `DELETE /admin/api/v1/users/{user_id}/api-keys/{key_id}`.
-    /// Requires a platform key.
-    pub async fn delete_api_key(&self, user_id: &str, key_id: &str) -> Result<(), DwError> {
+    /// List API keys for the current user with pagination.
+    /// Corresponds to `GET /admin/api/v1/users/current/api-keys` (requires platform key).
+    pub async fn list_api_keys(&self, skip: u64, limit: u64) -> Result<PaginatedApiKeys, DwError> {
+        let req = self
+            .get(ApiSurface::Admin, "/admin/api/v1/users/current/api-keys")?
+            .query(&[("skip", skip.to_string()), ("limit", limit.to_string())]);
+        self.send(req).await
+    }
+
+    /// Delete an API key for the current user.
+    /// Corresponds to `DELETE /admin/api/v1/users/current/api-keys/{key_id}` (requires platform key).
+    pub async fn delete_api_key(&self, key_id: &str) -> Result<(), DwError> {
         let req = self.delete(
             ApiSurface::Admin,
-            &format!("/admin/api/v1/users/{}/api-keys/{}", user_id, key_id),
+            &format!("/admin/api/v1/users/current/api-keys/{}", key_id),
         )?;
         self.send_empty(req).await
     }
