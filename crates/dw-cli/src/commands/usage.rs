@@ -130,7 +130,7 @@ pub async fn list_requests(
     args: &crate::cli::RequestsArgs,
     format: OutputFormat,
 ) -> anyhow::Result<()> {
-    use dw_client::endpoints::usage::ListRequestsParams;
+    use dw_client::types::usage::ListRequestsParams;
 
     let params = ListRequestsParams {
         limit: args.limit.min(100),

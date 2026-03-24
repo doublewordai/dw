@@ -53,7 +53,7 @@ pub struct AnalyticsEntry {
     #[serde(default)]
     pub model: Option<String>,
     #[serde(default)]
-    pub status_code: Option<i32>,
+    pub status_code: Option<u16>,
     #[serde(default)]
     pub duration_ms: Option<i64>,
     #[serde(default)]
@@ -80,4 +80,35 @@ pub struct AnalyticsEntry {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ListAnalyticsResponse {
     pub entries: Vec<AnalyticsEntry>,
+}
+
+/// Query parameters for listing requests.
+#[derive(Debug, Clone, Serialize)]
+pub struct ListRequestsParams {
+    pub limit: u64,
+    pub skip: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none", rename = "timestamp_after")]
+    pub since: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none", rename = "timestamp_before")]
+    pub until: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none", rename = "fusillade_batch_id")]
+    pub batch_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status_code: Option<u16>,
+}
+
+impl Default for ListRequestsParams {
+    fn default() -> Self {
+        Self {
+            limit: 20,
+            skip: 0,
+            model: None,
+            since: None,
+            until: None,
+            batch_id: None,
+            status_code: None,
+        }
+    }
 }
