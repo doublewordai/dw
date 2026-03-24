@@ -75,6 +75,7 @@ async fn run() -> anyhow::Result<()> {
             clap_complete::generate(args.shell, &mut cmd, "dw", &mut std::io::stdout());
             Ok(())
         }
+        Commands::Update => commands::update::run().await,
         Commands::Examples(subcmd) => match subcmd {
             ExampleCommands::List => {
                 commands::examples::list();
@@ -287,7 +288,8 @@ async fn run() -> anyhow::Result<()> {
                 | Commands::Account(_)
                 | Commands::Config(_)
                 | Commands::Examples(_)
-                | Commands::Completions(_) => unreachable!(),
+                | Commands::Completions(_)
+                | Commands::Update => unreachable!(),
             }
         }
     }

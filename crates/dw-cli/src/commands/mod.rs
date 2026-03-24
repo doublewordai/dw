@@ -8,5 +8,6 @@ pub mod keys;
 pub mod models;
 pub mod realtime;
 pub mod stream;
+pub mod update;
 pub mod usage;
 pub mod webhooks;
