@@ -220,11 +220,16 @@ async fn run() -> anyhow::Result<()> {
                     BatchCommands::Watch { ids } => {
                         commands::batches::watch_batches(&client, &ids).await
                     }
+                    BatchCommands::Analytics { id } => {
+                        commands::usage::batch_analytics(&client, &id, format).await
+                    }
                 },
 
                 Commands::Stream(args) => commands::stream::run(&client, &args).await,
 
                 Commands::Realtime(args) => commands::realtime::run(&client, &args).await,
+
+                Commands::Usage(args) => commands::usage::run(&client, &args, format).await,
 
                 Commands::Webhooks(subcmd) => match subcmd {
                     WebhookCommands::Create {
