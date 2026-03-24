@@ -21,7 +21,7 @@ pub struct ListRequestsParams {
     pub since: Option<String>,
     pub until: Option<String>,
     pub batch_id: Option<String>,
-    pub status_code: Option<i32>,
+    pub status_code: Option<u16>,
 }
 
 impl Default for ListRequestsParams {

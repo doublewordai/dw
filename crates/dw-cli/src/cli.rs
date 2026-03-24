@@ -592,7 +592,7 @@ pub struct RequestsArgs {
     /// Filter by batch ID.
     #[arg(long)]
     pub batch_id: Option<String>,
-    /// Filter by HTTP status code.
-    #[arg(long)]
-    pub status: Option<i32>,
+    /// Filter by HTTP status code (100-599).
+    #[arg(long, value_parser = clap::value_parser!(u16).range(100..=599))]
+    pub status: Option<u16>,
 }

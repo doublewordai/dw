@@ -1,5 +1,5 @@
 use crate::cli::UsageArgs;
-use crate::output::OutputFormat;
+use crate::output::{OutputFormat, truncate_timestamp};
 use dw_client::DwClient;
 
 /// Show usage summary.
@@ -233,16 +233,4 @@ fn format_tokens(n: i64) -> String {
     } else {
         n.to_string()
     }
-}
-
-/// Best-effort truncation of an ISO timestamp to "YYYY-MM-DD HH:MM:SS".
-/// Strips fractional seconds (splits on '.') and trailing 'Z'.
-/// Does not handle all timezone offset formats (e.g. +00:00 after fractional seconds).
-fn truncate_timestamp(ts: &str) -> String {
-    ts.replace('T', " ")
-        .split('.')
-        .next()
-        .unwrap_or(ts)
-        .trim_end_matches('Z')
-        .to_string()
 }
