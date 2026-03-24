@@ -272,22 +272,26 @@ pub async fn prepare(args: &FilePrepareArgs) -> anyhow::Result<()> {
 
 // ===== Local JSONL manipulation commands =====
 
-/// Show stats for a local JSONL file.
+use std::io::{BufRead, Write as IoWrite};
+
+/// Show stats for a local JSONL file (streaming, bounded memory).
 pub fn stats(path: &std::path::Path, format: OutputFormat) -> anyhow::Result<()> {
-    let contents = std::fs::read_to_string(path)?;
+    let file = std::fs::File::open(path)?;
+    let reader = std::io::BufReader::new(file);
+
     let mut line_count: usize = 0;
     let mut models: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
     let mut total_prompt_chars: usize = 0;
     let mut errors: usize = 0;
 
-    for line in contents.lines() {
+    for line in reader.lines() {
+        let line = line?;
         if line.trim().is_empty() {
             continue;
         }
         line_count += 1;
-        match serde_json::from_str::<serde_json::Value>(line) {
+        match serde_json::from_str::<serde_json::Value>(&line) {
             Ok(val) => {
-                // Extract model from body.model
                 if let Some(model) = val
                     .get("body")
                     .and_then(|b| b.get("model"))
@@ -295,7 +299,6 @@ pub fn stats(path: &std::path::Path, format: OutputFormat) -> anyhow::Result<()>
                 {
                     *models.entry(model.to_string()).or_insert(0) += 1;
                 }
-                // Rough token estimate from message content length
                 if let Some(messages) = val
                     .get("body")
                     .and_then(|b| b.get("messages"))
@@ -312,7 +315,6 @@ pub fn stats(path: &std::path::Path, format: OutputFormat) -> anyhow::Result<()>
         }
     }
 
-    // Rough token estimate: ~4 chars per token
     let estimated_tokens = total_prompt_chars / 4;
 
     match format {
@@ -352,51 +354,67 @@ pub fn stats(path: &std::path::Path, format: OutputFormat) -> anyhow::Result<()>
     Ok(())
 }
 
-/// Extract a random sample from a JSONL file.
+/// Extract a random sample using reservoir sampling (single pass, O(k) memory).
 pub fn sample(
     path: &std::path::Path,
     count: usize,
     output: Option<&std::path::Path>,
 ) -> anyhow::Result<()> {
-    use rand::seq::SliceRandom;
+    use rand::Rng;
 
-    let contents = std::fs::read_to_string(path)?;
-    let lines: Vec<&str> = contents.lines().filter(|l| !l.trim().is_empty()).collect();
+    let file = std::fs::File::open(path)?;
+    let reader = std::io::BufReader::new(file);
+    let mut rng = rand::rng();
 
-    if lines.is_empty() {
+    // Reservoir sampling: keep exactly `count` lines in memory
+    let mut reservoir: Vec<String> = Vec::with_capacity(count);
+    let mut total: usize = 0;
+
+    for line in reader.lines() {
+        let line = line?;
+        if line.trim().is_empty() {
+            continue;
+        }
+        total += 1;
+        if reservoir.len() < count {
+            reservoir.push(line);
+        } else {
+            let j = rng.random_range(0..total);
+            if j < count {
+                reservoir[j] = line;
+            }
+        }
+    }
+
+    if reservoir.is_empty() {
         anyhow::bail!("File is empty: {}", path.display());
     }
 
-    let sample_size = count.min(lines.len());
-    let mut rng = rand::rng();
-    let mut indices: Vec<usize> = (0..lines.len()).collect();
-    indices.shuffle(&mut rng);
-    indices.truncate(sample_size);
-    indices.sort(); // preserve original order
+    let mut writer: Box<dyn IoWrite> = if let Some(out_path) = output {
+        Box::new(std::fs::File::create(out_path)?)
+    } else {
+        Box::new(std::io::stdout())
+    };
 
-    let sampled: Vec<&str> = indices.iter().map(|&i| lines[i]).collect();
-    let result = sampled.join("\n") + "\n";
+    for line in &reservoir {
+        writeln!(writer, "{}", line)?;
+    }
 
     if let Some(out_path) = output {
-        std::fs::write(out_path, &result)?;
         eprintln!(
             "Sampled {} of {} lines → {}",
-            sample_size,
-            lines.len(),
+            reservoir.len(),
+            total,
             out_path.display()
         );
-    } else {
-        print!("{}", result);
     }
 
     Ok(())
 }
 
-/// Merge multiple JSONL files into one.
+/// Merge multiple JSONL files into one (streaming).
 pub fn merge(paths: &[std::path::PathBuf], output: Option<&std::path::Path>) -> anyhow::Result<()> {
-    use std::io::Write;
-
-    let mut writer: Box<dyn Write> = if let Some(out_path) = output {
+    let mut writer: Box<dyn IoWrite> = if let Some(out_path) = output {
         Box::new(std::fs::File::create(out_path)?)
     } else {
         Box::new(std::io::stdout())
@@ -404,8 +422,10 @@ pub fn merge(paths: &[std::path::PathBuf], output: Option<&std::path::Path>) -> 
 
     let mut total_lines = 0;
     for path in paths {
-        let contents = std::fs::read_to_string(path)?;
-        for line in contents.lines() {
+        let file = std::fs::File::open(path)?;
+        let reader = std::io::BufReader::new(file);
+        for line in reader.lines() {
+            let line = line?;
             if !line.trim().is_empty() {
                 writeln!(writer, "{}", line)?;
                 total_lines += 1;
@@ -425,7 +445,7 @@ pub fn merge(paths: &[std::path::PathBuf], output: Option<&std::path::Path>) -> 
     Ok(())
 }
 
-/// Split a JSONL file into chunks.
+/// Split a JSONL file into chunks (streaming, one chunk file at a time).
 pub fn split(
     path: &std::path::Path,
     chunk_size: usize,
@@ -435,83 +455,132 @@ pub fn split(
         anyhow::bail!("Chunk size must be at least 1.");
     }
 
-    let contents = std::fs::read_to_string(path)?;
-    let lines: Vec<&str> = contents.lines().filter(|l| !l.trim().is_empty()).collect();
-
-    if lines.is_empty() {
-        anyhow::bail!("File is empty: {}", path.display());
-    }
-
     let dir = output_dir.unwrap_or_else(|| path.parent().unwrap_or(std::path::Path::new(".")));
+    std::fs::create_dir_all(dir)?;
+
     let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("chunk");
 
-    let num_chunks = lines.len().div_ceil(chunk_size);
+    let file = std::fs::File::open(path)?;
+    let reader = std::io::BufReader::new(file);
 
-    for (i, chunk) in lines.chunks(chunk_size).enumerate() {
-        let chunk_path = dir.join(format!("{}-{:03}.jsonl", stem, i + 1));
-        let chunk_content = chunk.join("\n") + "\n";
-        std::fs::write(&chunk_path, chunk_content)?;
-        eprintln!("  {} ({} lines)", chunk_path.display(), chunk.len());
+    let mut chunk_idx: usize = 0;
+    let mut lines_in_chunk: usize = 0;
+    let mut total_lines: usize = 0;
+    let mut writer: Option<std::io::BufWriter<std::fs::File>> = None;
+
+    for line in reader.lines() {
+        let line = line?;
+        if line.trim().is_empty() {
+            continue;
+        }
+
+        // Start a new chunk file if needed
+        if writer.is_none() || lines_in_chunk >= chunk_size {
+            // Close previous chunk
+            if let Some(ref mut w) = writer {
+                w.flush()?;
+                eprintln!(
+                    "  {}-{:03}.jsonl ({} lines)",
+                    stem, chunk_idx, lines_in_chunk
+                );
+            }
+            chunk_idx += 1;
+            lines_in_chunk = 0;
+            let chunk_path = dir.join(format!("{}-{:03}.jsonl", stem, chunk_idx));
+            writer = Some(std::io::BufWriter::new(std::fs::File::create(chunk_path)?));
+        }
+
+        writeln!(writer.as_mut().unwrap(), "{}", line)?;
+        lines_in_chunk += 1;
+        total_lines += 1;
+    }
+
+    // Flush final chunk
+    if let Some(ref mut w) = writer {
+        w.flush()?;
+        eprintln!(
+            "  {}-{:03}.jsonl ({} lines)",
+            stem, chunk_idx, lines_in_chunk
+        );
+    }
+
+    if total_lines == 0 {
+        anyhow::bail!("File is empty: {}", path.display());
     }
 
     eprintln!(
         "Split {} lines into {} chunks of up to {}",
-        lines.len(),
-        num_chunks,
-        chunk_size
+        total_lines, chunk_idx, chunk_size
     );
 
     Ok(())
 }
 
 /// Compare two JSONL result files by custom_id.
+/// Uses streaming for file B; file A must fit in memory for lookup.
 pub fn diff(a: &std::path::Path, b: &std::path::Path, format: OutputFormat) -> anyhow::Result<()> {
-    let parse_file = |path: &std::path::Path| -> anyhow::Result<std::collections::HashMap<String, serde_json::Value>> {
-        let contents = std::fs::read_to_string(path)?;
-        let mut map = std::collections::HashMap::new();
-        for line in contents.lines() {
-            if line.trim().is_empty() {
-                continue;
-            }
-            if let Ok(val) = serde_json::from_str::<serde_json::Value>(line)
-                && let Some(id) = val.get("custom_id").and_then(|c| c.as_str()) {
-                    map.insert(id.to_string(), val);
+    // Parse file into a map of custom_id → response content hash.
+    // We only store the content string (not full Value) to reduce memory.
+    let parse_file =
+        |path: &std::path::Path| -> anyhow::Result<std::collections::HashMap<String, Option<String>>> {
+            let file = std::fs::File::open(path)?;
+            let reader = std::io::BufReader::new(file);
+            let mut map = std::collections::HashMap::new();
+            let mut parse_errors = 0usize;
+            let mut missing_id = 0usize;
+
+            for line in reader.lines() {
+                let line = line?;
+                if line.trim().is_empty() {
+                    continue;
                 }
-        }
-        Ok(map)
-    };
+                match serde_json::from_str::<serde_json::Value>(&line) {
+                    Ok(val) => {
+                        if let Some(id) = val.get("custom_id").and_then(|c| c.as_str()) {
+                            let content = extract_content(&val);
+                            map.insert(id.to_string(), content);
+                        } else {
+                            missing_id += 1;
+                        }
+                    }
+                    Err(_) => parse_errors += 1,
+                }
+            }
+
+            if parse_errors > 0 || missing_id > 0 {
+                eprintln!(
+                    "Warning: {} ({} parse errors, {} missing custom_id)",
+                    path.display(),
+                    parse_errors,
+                    missing_id
+                );
+            }
+            Ok(map)
+        };
 
     let map_a = parse_file(a)?;
     let map_b = parse_file(b)?;
 
-    let only_a: Vec<_> = map_a.keys().filter(|k| !map_b.contains_key(*k)).collect();
-    let only_b: Vec<_> = map_b.keys().filter(|k| !map_a.contains_key(*k)).collect();
-    let common: Vec<_> = map_a.keys().filter(|k| map_b.contains_key(*k)).collect();
+    // Compute counts without allocating key vectors
+    let mut only_a_count = 0usize;
+    let mut common_count = 0usize;
+    let mut same = 0usize;
+    let mut different = 0usize;
 
-    // For common entries, extract the response content and compare
-    let mut different = 0;
-    let mut same = 0;
-
-    let extract_content = |val: &serde_json::Value| -> Option<String> {
-        val.get("response")
-            .and_then(|r| r.get("body"))
-            .and_then(|b| b.get("choices"))
-            .and_then(|c| c.get(0))
-            .and_then(|c| c.get("message"))
-            .and_then(|m| m.get("content"))
-            .and_then(|c| c.as_str())
-            .map(|s| s.to_string())
-    };
-
-    for id in &common {
-        let content_a = extract_content(&map_a[*id]);
-        let content_b = extract_content(&map_b[*id]);
-        if content_a == content_b {
-            same += 1;
+    for (id, content_a) in &map_a {
+        if let Some(content_b) = map_b.get(id) {
+            common_count += 1;
+            if content_a == content_b {
+                same += 1;
+            } else {
+                different += 1;
+            }
         } else {
-            different += 1;
+            only_a_count += 1;
         }
     }
+
+    let only_b_count = map_b.keys().filter(|k| !map_a.contains_key(*k)).count();
 
     match format {
         OutputFormat::Json => {
@@ -520,22 +589,18 @@ pub fn diff(a: &std::path::Path, b: &std::path::Path, format: OutputFormat) -> a
                 "file_b": b.display().to_string(),
                 "entries_a": map_a.len(),
                 "entries_b": map_b.len(),
-                "common": common.len(),
+                "common": common_count,
                 "identical_responses": same,
                 "different_responses": different,
-                "only_in_a": only_a.len(),
-                "only_in_b": only_b.len(),
+                "only_in_a": only_a_count,
+                "only_in_b": only_b_count,
             });
             println!("{}", serde_json::to_string_pretty(&result)?);
         }
         OutputFormat::Plain => {
             println!(
                 "{}\t{}\t{}\t{}\t{}",
-                common.len(),
-                same,
-                different,
-                only_a.len(),
-                only_b.len()
+                common_count, same, different, only_a_count, only_b_count
             );
         }
         OutputFormat::Table => {
@@ -543,19 +608,31 @@ pub fn diff(a: &std::path::Path, b: &std::path::Path, format: OutputFormat) -> a
             println!("  A: {} ({} entries)", a.display(), map_a.len());
             println!("  B: {} ({} entries)", b.display(), map_b.len());
             println!();
-            println!("  Common IDs:          {}", common.len());
+            println!("  Common IDs:          {}", common_count);
             println!("  Identical responses:  {}", same);
             println!("  Different responses:  {}", different);
-            if !only_a.is_empty() {
-                println!("  Only in A:           {}", only_a.len());
+            if only_a_count > 0 {
+                println!("  Only in A:           {}", only_a_count);
             }
-            if !only_b.is_empty() {
-                println!("  Only in B:           {}", only_b.len());
+            if only_b_count > 0 {
+                println!("  Only in B:           {}", only_b_count);
             }
         }
     }
 
     Ok(())
+}
+
+/// Extract response content string for comparison.
+fn extract_content(val: &serde_json::Value) -> Option<String> {
+    val.get("response")
+        .and_then(|r| r.get("body"))
+        .and_then(|b| b.get("choices"))
+        .and_then(|c| c.get(0))
+        .and_then(|c| c.get("message"))
+        .and_then(|m| m.get("content"))
+        .and_then(|c| c.as_str())
+        .map(|s| s.to_string())
 }
 
 fn format_number(n: usize) -> String {
