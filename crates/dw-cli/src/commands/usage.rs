@@ -133,7 +133,7 @@ pub async fn list_requests(
     use dw_client::types::usage::ListRequestsParams;
 
     let params = ListRequestsParams {
-        limit: args.limit.min(100),
+        limit: args.limit,
         skip: args.skip,
         model: args.model.clone(),
         since: args.since.clone(),

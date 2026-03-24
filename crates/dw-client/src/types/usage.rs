@@ -78,7 +78,7 @@ pub struct AnalyticsEntry {
 
 /// Response containing a list of analytics entries.
 #[derive(Debug, Serialize, Deserialize)]
-pub struct ListAnalyticsResponse {
+pub struct ListRequestsResponse {
     pub entries: Vec<AnalyticsEntry>,
 }
 

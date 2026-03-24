@@ -1,7 +1,7 @@
 use crate::client::{ApiSurface, DwClient};
 use crate::error::DwError;
 use crate::types::usage::{
-    BatchAnalytics, ListAnalyticsResponse, ListRequestsParams, UsageResponse,
+    BatchAnalytics, ListRequestsParams, ListRequestsResponse, UsageResponse,
 };
 
 /// Append a UTC time component if the input looks like a bare date (YYYY-MM-DD only).
@@ -44,7 +44,7 @@ impl DwClient {
     pub async fn list_requests(
         &self,
         params: &ListRequestsParams,
-    ) -> Result<ListAnalyticsResponse, DwError> {
+    ) -> Result<ListRequestsResponse, DwError> {
         // Normalize date fields before sending
         let mut normalized = params.clone();
         if let Some(ref since) = normalized.since {
