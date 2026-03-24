@@ -100,6 +100,9 @@ pub enum Commands {
     #[command(subcommand)]
     Examples(ExampleCommands),
 
+    /// Update dw to the latest release.
+    Update,
+
     /// View and update CLI configuration.
     #[command(subcommand)]
     Config(ConfigCommands),
