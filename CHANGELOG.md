@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.1.4](https://github.com/doublewordai/dw/compare/v0.1.3...v0.1.4) (2026-03-24)
+
+
+### Features
+
+* api keys ([#16](https://github.com/doublewordai/dw/issues/16)) ([b6514dd](https://github.com/doublewordai/dw/commit/b6514ddf9a11deb2ac73f9c0fa3d0394875b1b98))
+* configurable timeouts ([#12](https://github.com/doublewordai/dw/issues/12)) ([a7a55f4](https://github.com/doublewordai/dw/commit/a7a55f458f3a2b4ab03e88aa5c7808e7ac249446))
+* dw requests ([#15](https://github.com/doublewordai/dw/issues/15)) ([63a9886](https://github.com/doublewordai/dw/commit/63a9886a364f3475aea72409f45bb8daf1921881))
+* dw usage and dw batches analytics ([#14](https://github.com/doublewordai/dw/issues/14)) ([74ba2d3](https://github.com/doublewordai/dw/commit/74ba2d3b29fa8e612da9d0f9e214feae6a79ea2b))
+* first run ux improvements ([#13](https://github.com/doublewordai/dw/issues/13)) ([f5b9320](https://github.com/doublewordai/dw/commit/f5b9320e0fd3b8c699499aedb30c6a23dcc52f0b))
+
+
+### Bug Fixes
+
+* better naming / display for accounts ([#10](https://github.com/doublewordai/dw/issues/10)) ([3fea3c1](https://github.com/doublewordai/dw/commit/3fea3c15202821975f372d5672d5a940b83de714))
+
 ## [0.1.3](https://github.com/doublewordai/dw/compare/v0.1.2...v0.1.3) (2026-03-20)
 
 
