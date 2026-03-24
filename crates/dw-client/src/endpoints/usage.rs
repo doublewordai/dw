@@ -21,19 +21,17 @@ impl DwClient {
         start_date: Option<&str>,
         end_date: Option<&str>,
     ) -> Result<UsageResponse, DwError> {
-        let mut url = "/admin/api/v1/usage".to_string();
-        let mut params = Vec::new();
+        let mut request = self.get(ApiSurface::Admin, "/admin/api/v1/usage")?;
+        let mut query_params: Vec<(&str, String)> = Vec::new();
         if let Some(start) = start_date {
-            params.push(format!("start_date={}", normalize_date(start)));
+            query_params.push(("start_date", normalize_date(start)));
         }
         if let Some(end) = end_date {
-            params.push(format!("end_date={}", normalize_date(end)));
+            query_params.push(("end_date", normalize_date(end)));
         }
-        if !params.is_empty() {
-            url = format!("{}?{}", url, params.join("&"));
+        if !query_params.is_empty() {
+            request = request.query(&query_params);
         }
-
-        let request = self.get(ApiSurface::Admin, &url)?;
         self.send(request).await
     }
 
