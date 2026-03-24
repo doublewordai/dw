@@ -4,10 +4,11 @@ use crate::types::usage::{
     BatchAnalytics, ListAnalyticsResponse, ListRequestsParams, UsageResponse,
 };
 
-/// Append a UTC time component if the input looks like a bare date (no 'T').
+/// Append a UTC time component if the input looks like a bare date (YYYY-MM-DD only).
+/// Passes through anything that already contains a time component ('T' or ':').
 /// Does not validate the format — invalid strings are forwarded to the API as-is.
 fn normalize_date(date: &str) -> String {
-    if date.contains('T') {
+    if date.contains('T') || date.contains(':') {
         date.to_string()
     } else {
         format!("{}T00:00:00Z", date)
