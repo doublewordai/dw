@@ -85,6 +85,10 @@ pub enum Commands {
     /// Show usage summary (tokens, cost, requests by model).
     Usage(UsageArgs),
 
+    /// Create, list, and delete API keys.
+    #[command(subcommand)]
+    Keys(KeyCommands),
+
     /// Manage batch completion webhooks.
     #[command(subcommand)]
     Webhooks(WebhookCommands),
@@ -464,6 +468,31 @@ pub struct RealtimeArgs {
     /// Print token usage summary after completion.
     #[arg(long)]
     pub usage: bool,
+}
+
+// --- Keys ---
+
+#[derive(Subcommand)]
+pub enum KeyCommands {
+    /// Create an API key.
+    Create {
+        /// Name for the key.
+        #[arg(long)]
+        name: String,
+        /// Optional description.
+        #[arg(long)]
+        description: Option<String>,
+    },
+    /// List your API keys (secrets are masked).
+    List,
+    /// Delete an API key.
+    Delete {
+        /// Key ID (UUID).
+        id: String,
+        /// Skip confirmation prompt.
+        #[arg(long, short = 'y')]
+        yes: bool,
+    },
 }
 
 // --- Webhooks ---
