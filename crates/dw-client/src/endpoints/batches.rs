@@ -35,6 +35,13 @@ impl DwClient {
         self.send(req).await
     }
 
+    /// Get batch details without client-level retries.
+    /// Use this in polling loops that handle their own retry logic.
+    pub async fn get_batch_once(&self, batch_id: &str) -> Result<BatchResponse, DwError> {
+        let req = self.get(ApiSurface::Ai, &format!("/v1/batches/{}", batch_id))?;
+        self.send_once(req).await
+    }
+
     /// Cancel a batch.
     ///
     /// Corresponds to `POST /v1/batches/{batch_id}/cancel`.
@@ -76,6 +83,10 @@ impl DwClient {
     /// and the offset of the last line returned (`X-Last-Line`).
     ///
     /// Corresponds to `GET /v1/batches/{batch_id}/results?skip=N&limit=M&status=S`.
+    ///
+    /// Does not use client-level retries (`send_with_retry`) — callers in polling
+    /// loops handle their own retry logic. On 429, returns `DwError::RateLimited`
+    /// with a retry delay (server-provided when available, otherwise a default).
     pub async fn get_batch_results_page(
         &self,
         batch_id: &str,
@@ -94,6 +105,13 @@ impl DwClient {
             .query(&query_params);
 
         let response = request.send().await?;
+
+        if response.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
+            let retry_after = DwClient::extract_retry_after(response).await;
+            return Err(DwError::RateLimited {
+                retry_after: Some(retry_after),
+            });
+        }
 
         if !response.status().is_success() {
             return Err(DwError::from_response(response).await);
