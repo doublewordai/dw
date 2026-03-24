@@ -17,8 +17,10 @@ pub enum ApiSurface {
 
 /// Configuration for the Doubleword API client.
 ///
-/// Use `..Default::default()` when constructing to allow future field additions.
-/// TODO: Add `#[non_exhaustive]` when publishing this crate externally.
+/// Always construct with `..Default::default()` to be forward-compatible with new fields:
+/// ```ignore
+/// DwClientConfig { ai_base_url: "...".into(), ..Default::default() }
+/// ```
 #[derive(Debug, Clone)]
 pub struct DwClientConfig {
     pub ai_base_url: String,
@@ -179,6 +181,7 @@ impl DwClient {
 
     /// Send a request and parse the JSON response, without retries.
     /// Use this in polling loops that handle their own retry logic.
+    /// On 429, extracts `Retry-After` from headers so callers can honor the delay.
     pub async fn send_once<T: serde::de::DeserializeOwned>(
         &self,
         request: reqwest::RequestBuilder,
@@ -186,6 +189,11 @@ impl DwClient {
         let response = request.send().await?;
         if response.status().is_success() {
             Ok(response.json().await?)
+        } else if response.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
+            let retry_after = Self::extract_retry_after(response).await;
+            Err(DwError::RateLimited {
+                retry_after: Some(retry_after),
+            })
         } else {
             Err(DwError::from_response(response).await)
         }
@@ -254,32 +262,30 @@ impl DwClient {
         &self,
         request: reqwest::RequestBuilder,
     ) -> Result<reqwest::Response, DwError> {
-        // Clamp max_retries to prevent excessive memory/delay
         let max_retries = self.config.max_retries.min(10);
 
-        // Clone requests up front for potential retries
-        let mut clones: std::collections::VecDeque<reqwest::RequestBuilder> =
-            std::collections::VecDeque::with_capacity(max_retries as usize);
+        // Lazy cloning: keep at most one "next attempt" clone at a time
         let mut current = request;
-        for _ in 0..max_retries {
-            if let Some(clone) = current.try_clone() {
-                clones.push_back(clone);
-            }
-        }
-
         let mut attempt: u32 = 0;
+
         loop {
-            let can_retry = !clones.is_empty();
+            // Clone lazily before sending — only if we might need to retry
+            let next = if attempt < max_retries {
+                current.try_clone()
+            } else {
+                None
+            };
 
             let response = match current.send().await {
                 Ok(r) => r,
                 Err(e) => {
-                    // Network error — retry if transient and we have retries left
-                    if can_retry && (e.is_timeout() || e.is_connect() || e.is_request()) {
+                    if let Some(retry) = next
+                        && (e.is_timeout() || e.is_connect() || e.is_request())
+                    {
                         let delay = Self::backoff_delay(attempt);
                         tracing::warn!(attempt, ?delay, "Network error, retrying: {}", e);
                         tokio::time::sleep(delay).await;
-                        current = clones.pop_front().unwrap();
+                        current = retry;
                         attempt += 1;
                         continue;
                     }
@@ -289,20 +295,21 @@ impl DwClient {
 
             if response.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
                 let retry_after = Self::extract_retry_after(response).await;
-                if can_retry {
+                if let Some(retry) = next {
                     tracing::warn!(attempt, retry_after, "Rate limited (429), retrying");
                     tokio::time::sleep(Duration::from_secs(retry_after)).await;
-                    current = clones.pop_front().unwrap();
+                    current = retry;
                     attempt += 1;
                     continue;
                 }
-                // No retries left — return structured error with the delay
                 return Err(DwError::RateLimited {
                     retry_after: Some(retry_after),
                 });
             }
 
-            if response.status().is_server_error() && can_retry {
+            if response.status().is_server_error()
+                && let Some(retry) = next
+            {
                 let delay = Self::backoff_delay(attempt);
                 tracing::warn!(
                     attempt,
@@ -312,7 +319,7 @@ impl DwClient {
                 );
                 let _ = response.bytes().await;
                 tokio::time::sleep(delay).await;
-                current = clones.pop_front().unwrap();
+                current = retry;
                 attempt += 1;
                 continue;
             }
