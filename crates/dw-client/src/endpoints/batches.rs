@@ -102,6 +102,13 @@ impl DwClient {
 
         let response = request.send().await?;
 
+        if response.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
+            let retry_after = DwClient::extract_retry_after(response).await;
+            return Err(DwError::RateLimited {
+                retry_after: Some(retry_after),
+            });
+        }
+
         if !response.status().is_success() {
             return Err(DwError::from_response(response).await);
         }

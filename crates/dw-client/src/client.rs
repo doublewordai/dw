@@ -224,7 +224,7 @@ impl DwClient {
 
     /// Extract retry-after delay from a 429 response (header or body).
     /// Always consumes the response body to allow connection reuse.
-    async fn extract_retry_after(response: reqwest::Response) -> u64 {
+    pub(crate) async fn extract_retry_after(response: reqwest::Response) -> u64 {
         let header_retry = response
             .headers()
             .get("retry-after")
@@ -250,14 +250,15 @@ impl DwClient {
     /// Send a request, retrying on transient errors (429, 5xx, network).
     ///
     /// Uses `config.max_retries` (default: 1, clamped to max 10). Set to 0 to
-    /// disable retries. On 429, extracts retry delay from `Retry-After` header
-    /// or `retry_after_seconds` in the JSON body. On 5xx/network errors, uses
-    /// exponential backoff (2s, 4s, 8s... capped at 60s).
+    /// disable retries. On 429, extracts retry delay from the `Retry-After`
+    /// header (integer seconds only — HTTP-date values are ignored and fall back
+    /// to `retry_after_seconds` in the JSON body, or 30s default).
+    /// On 5xx/network errors, uses exponential backoff (2s, 4s, 8s... capped at 60s).
     ///
-    /// Note: retries apply to all HTTP methods including POST. For non-idempotent
-    /// requests (create batch, upload file), `try_clone()` naturally fails for
-    /// streamed bodies, preventing retry of large uploads. Small JSON POSTs may
-    /// be retried; the server returns 409 on duplicates.
+    /// Retries only occur when `try_clone()` succeeds. Streamed/multipart bodies
+    /// (e.g. file uploads) cannot be cloned and are never retried. Small JSON
+    /// POST bodies can be cloned and may be retried — the server returns 409 on
+    /// duplicate resource creation.
     async fn send_with_retry(
         &self,
         request: reqwest::RequestBuilder,
