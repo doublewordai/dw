@@ -16,17 +16,16 @@ impl DwClient {
         self.send(req).await
     }
 
-    /// List API keys for the current user.
+    /// List API keys for the current user with pagination.
     /// Corresponds to `GET /admin/api/v1/users/current/api-keys` (requires platform key).
-    pub async fn list_api_keys(&self) -> Result<PaginatedApiKeys, DwError> {
-        let req = self.get(
-            ApiSurface::Admin,
-            "/admin/api/v1/users/current/api-keys?limit=100",
-        )?;
+    pub async fn list_api_keys(&self, skip: u64, limit: u64) -> Result<PaginatedApiKeys, DwError> {
+        let req = self
+            .get(ApiSurface::Admin, "/admin/api/v1/users/current/api-keys")?
+            .query(&[("skip", skip.to_string()), ("limit", limit.to_string())]);
         self.send(req).await
     }
 
-    /// Delete an API key.
+    /// Delete an API key for the current user.
     /// Corresponds to `DELETE /admin/api/v1/users/current/api-keys/{key_id}` (requires platform key).
     pub async fn delete_api_key(&self, key_id: &str) -> Result<(), DwError> {
         let req = self.delete(

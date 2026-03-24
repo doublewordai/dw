@@ -235,7 +235,9 @@ async fn run() -> anyhow::Result<()> {
                     KeyCommands::Create { name, description } => {
                         commands::keys::create(&client, &name, description.as_deref(), format).await
                     }
-                    KeyCommands::List => commands::keys::list(&client, format).await,
+                    KeyCommands::List { limit, skip } => {
+                        commands::keys::list(&client, limit, skip, format).await
+                    }
                     KeyCommands::Delete { id, yes } => {
                         commands::keys::delete(&client, &id, yes).await
                     }

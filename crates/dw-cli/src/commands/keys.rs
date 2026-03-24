@@ -40,25 +40,23 @@ pub async fn create(
     Ok(())
 }
 
-/// List API keys.
-pub async fn list(client: &DwClient, format: OutputFormat) -> anyhow::Result<()> {
-    let response = client.list_api_keys().await?;
-
-    // Filter out hidden CLI keys (DW CLI prefix) to avoid confusion
-    let keys: Vec<_> = response
-        .data
-        .iter()
-        .filter(|k| !k.name.starts_with("DW CLI"))
-        .collect();
+/// List API keys with pagination.
+pub async fn list(
+    client: &DwClient,
+    limit: u64,
+    after: u64,
+    format: OutputFormat,
+) -> anyhow::Result<()> {
+    let response = client.list_api_keys(after, limit).await?;
 
     match format {
         OutputFormat::Json => {
-            for key in &keys {
+            for key in &response.data {
                 println!("{}", serde_json::to_string(key)?);
             }
         }
         OutputFormat::Plain => {
-            for key in &keys {
+            for key in &response.data {
                 println!(
                     "{}\t{}\t{}",
                     key.id,
@@ -68,7 +66,7 @@ pub async fn list(client: &DwClient, format: OutputFormat) -> anyhow::Result<()>
             }
         }
         OutputFormat::Table => {
-            if keys.is_empty() {
+            if response.data.is_empty() {
                 eprintln!("No API keys found.");
                 return Ok(());
             }
@@ -76,7 +74,7 @@ pub async fn list(client: &DwClient, format: OutputFormat) -> anyhow::Result<()>
             let mut table = comfy_table::Table::new();
             table.set_header(vec!["ID", "Name", "Purpose", "Created", "Last Used"]);
 
-            for key in &keys {
+            for key in &response.data {
                 table.add_row(vec![
                     key.id.clone(),
                     key.name.clone(),
@@ -93,6 +91,16 @@ pub async fn list(client: &DwClient, format: OutputFormat) -> anyhow::Result<()>
             }
 
             println!("{}", table);
+
+            if response.data.len() as i64 == limit as i64
+                && response.total_count > (after + limit) as i64
+            {
+                eprintln!(
+                    "\nMore keys available ({} total). Next page: dw keys list --skip {}",
+                    response.total_count,
+                    after + limit
+                );
+            }
         }
     }
 
@@ -121,5 +129,6 @@ fn truncate_timestamp(ts: &str) -> String {
         .split('.')
         .next()
         .unwrap_or(ts)
+        .trim_end_matches('Z')
         .to_string()
 }

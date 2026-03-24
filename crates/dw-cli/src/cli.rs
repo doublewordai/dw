@@ -484,7 +484,14 @@ pub enum KeyCommands {
         description: Option<String>,
     },
     /// List your API keys (secrets are masked).
-    List,
+    List {
+        /// Maximum number of keys to return (default: 20).
+        #[arg(long, short = 'n', default_value = "20")]
+        limit: u64,
+        /// Number of entries to skip (for pagination).
+        #[arg(long, default_value = "0")]
+        skip: u64,
+    },
     /// Delete an API key.
     Delete {
         /// Key ID (UUID).
