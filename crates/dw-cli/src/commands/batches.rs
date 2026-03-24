@@ -369,7 +369,15 @@ pub async fn watch_single(
                         e
                     );
                 }
-                let delay = 2u64.saturating_pow(consecutive_errors).min(60);
+                // Honor server-provided retry_after for rate limits, else backoff
+                let delay = if let dw_client::DwError::RateLimited {
+                    retry_after: Some(secs),
+                } = &e
+                {
+                    *secs
+                } else {
+                    2u64.saturating_pow(consecutive_errors).min(60)
+                };
                 bar.set_message(format!(
                     "{} — retrying ({}/{})",
                     batch_id, consecutive_errors, max_retries

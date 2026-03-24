@@ -217,7 +217,14 @@ async fn stream_loop(
                     bar.abandon_with_message(format!("{} — connection lost", batch_id));
                     anyhow::bail!("Lost connection after {} retries: {}", max_retries, e);
                 }
-                let delay = 2u64.saturating_pow(consecutive_errors).min(60);
+                let delay = if let dw_client::DwError::RateLimited {
+                    retry_after: Some(secs),
+                } = &e
+                {
+                    *secs
+                } else {
+                    2u64.saturating_pow(consecutive_errors).min(60)
+                };
                 bar.set_message(format!(
                     "{} — retrying ({}/{})",
                     batch_id, consecutive_errors, max_retries
@@ -251,7 +258,14 @@ async fn stream_loop(
                     bar.abandon_with_message(format!("{} — connection lost", batch_id));
                     anyhow::bail!("Lost connection after {} retries: {}", max_retries, e);
                 }
-                let delay = 2u64.saturating_pow(consecutive_errors).min(60);
+                let delay = if let dw_client::DwError::RateLimited {
+                    retry_after: Some(secs),
+                } = &e
+                {
+                    *secs
+                } else {
+                    2u64.saturating_pow(consecutive_errors).min(60)
+                };
                 bar.set_message(format!(
                     "{} — retrying ({}/{})",
                     batch_id, consecutive_errors, max_retries

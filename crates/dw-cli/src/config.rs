@@ -37,6 +37,16 @@ impl ClientConfig {
     pub fn effective_poll_interval(&self) -> u64 {
         self.poll_interval_secs.max(1)
     }
+
+    /// Get request timeout, clamped to at least 1 second (0 would mean instant timeout).
+    pub fn effective_timeout_secs(&self) -> u64 {
+        self.timeout_secs.max(1)
+    }
+
+    /// Get connect timeout, clamped to at least 1 second.
+    pub fn effective_connect_timeout_secs(&self) -> u64 {
+        self.connect_timeout_secs.max(1)
+    }
 }
 
 fn default_timeout_secs() -> u64 {
@@ -288,8 +298,10 @@ pub fn build_client(
         admin_base_url,
         inference_key: account.inference_key.clone(),
         platform_key: account.platform_key.clone(),
-        timeout: std::time::Duration::from_secs(client_config.timeout_secs),
-        connect_timeout: std::time::Duration::from_secs(client_config.connect_timeout_secs),
+        timeout: std::time::Duration::from_secs(client_config.effective_timeout_secs()),
+        connect_timeout: std::time::Duration::from_secs(
+            client_config.effective_connect_timeout_secs(),
+        ),
         max_retries: client_config.max_retries,
         ..Default::default()
     })
