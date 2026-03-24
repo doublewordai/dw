@@ -305,8 +305,18 @@ pub fn stats(path: &std::path::Path, format: OutputFormat) -> anyhow::Result<()>
                     .and_then(|m| m.as_array())
                 {
                     for msg in messages {
-                        if let Some(content) = msg.get("content").and_then(|c| c.as_str()) {
-                            total_prompt_chars += content.len();
+                        if let Some(content) = msg.get("content") {
+                            if let Some(s) = content.as_str() {
+                                // String content
+                                total_prompt_chars += s.len();
+                            } else if let Some(parts) = content.as_array() {
+                                // Multimodal array content — sum text parts only
+                                for part in parts {
+                                    if let Some(text) = part.get("text").and_then(|t| t.as_str()) {
+                                        total_prompt_chars += text.len();
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -521,12 +531,20 @@ pub fn split(
 }
 
 /// Compare two JSONL result files by custom_id.
-/// Both files are streamed line-by-line; only extracted content strings are stored in memory.
+/// Both files are streamed line-by-line; only a content hash (u64) is stored per entry.
 pub fn diff(a: &std::path::Path, b: &std::path::Path, format: OutputFormat) -> anyhow::Result<()> {
-    // Parse file into a map of custom_id → response content hash.
-    // We only store the content string (not full Value) to reduce memory.
+    use std::hash::{Hash, Hasher};
+
+    /// Hash the response content to a u64 for memory-efficient comparison.
+    fn content_hash(val: &serde_json::Value) -> u64 {
+        let mut hasher = std::hash::DefaultHasher::new();
+        extract_content(val).hash(&mut hasher);
+        hasher.finish()
+    }
+
+    // Parse file into a map of custom_id → content hash.
     let parse_file =
-        |path: &std::path::Path| -> anyhow::Result<std::collections::HashMap<String, Option<String>>> {
+        |path: &std::path::Path| -> anyhow::Result<std::collections::HashMap<String, u64>> {
             let file = std::fs::File::open(path)?;
             let reader = std::io::BufReader::new(file);
             let mut map = std::collections::HashMap::new();
@@ -541,8 +559,7 @@ pub fn diff(a: &std::path::Path, b: &std::path::Path, format: OutputFormat) -> a
                 match serde_json::from_str::<serde_json::Value>(&line) {
                     Ok(val) => {
                         if let Some(id) = val.get("custom_id").and_then(|c| c.as_str()) {
-                            let content = extract_content(&val);
-                            map.insert(id.to_string(), content);
+                            map.insert(id.to_string(), content_hash(&val));
                         } else {
                             missing_id += 1;
                         }

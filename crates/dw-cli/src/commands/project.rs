@@ -46,7 +46,7 @@ fn find_manifest() -> anyhow::Result<PathBuf> {
     let mut dir = std::env::current_dir()?;
     loop {
         let candidate = dir.join("dw.toml");
-        if candidate.exists() {
+        if candidate.is_file() {
             return Ok(candidate);
         }
         if !dir.pop() {
