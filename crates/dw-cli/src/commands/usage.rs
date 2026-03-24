@@ -124,6 +124,98 @@ pub async fn batch_analytics(
     Ok(())
 }
 
+/// List recent requests.
+pub async fn list_requests(
+    client: &DwClient,
+    args: &crate::cli::RequestsArgs,
+    format: OutputFormat,
+) -> anyhow::Result<()> {
+    use dw_client::endpoints::usage::ListRequestsParams;
+
+    let params = ListRequestsParams {
+        limit: args.limit.min(100),
+        skip: args.skip,
+        model: args.model.clone(),
+        since: args.since.clone(),
+        until: args.until.clone(),
+        batch_id: args.batch_id.clone(),
+        status_code: args.status,
+    };
+
+    let response = client.list_requests(&params).await?;
+
+    match format {
+        OutputFormat::Json => {
+            for entry in &response.entries {
+                println!("{}", serde_json::to_string(entry)?);
+            }
+        }
+        OutputFormat::Plain => {
+            for entry in &response.entries {
+                println!(
+                    "{}\t{}\t{}\t{}\t{}ms",
+                    entry.timestamp,
+                    entry.model.as_deref().unwrap_or("-"),
+                    entry
+                        .status_code
+                        .map(|c| c.to_string())
+                        .unwrap_or_else(|| "-".to_string()),
+                    format_tokens(entry.total_tokens.unwrap_or(0)),
+                    entry.duration_ms.unwrap_or(0),
+                );
+            }
+        }
+        OutputFormat::Table => {
+            if response.entries.is_empty() {
+                eprintln!("No requests found.");
+                return Ok(());
+            }
+
+            let mut table = comfy_table::Table::new();
+            table.set_header(vec![
+                "Timestamp",
+                "Model",
+                "Status",
+                "Tokens",
+                "Latency",
+                "Batch",
+            ]);
+
+            for entry in &response.entries {
+                table.add_row(vec![
+                    truncate_timestamp(&entry.timestamp),
+                    entry.model.as_deref().unwrap_or("-").to_string(),
+                    entry
+                        .status_code
+                        .map(|c| c.to_string())
+                        .unwrap_or_else(|| "-".to_string()),
+                    format_tokens(entry.total_tokens.unwrap_or(0)),
+                    entry
+                        .duration_ms
+                        .map(|d| format!("{}ms", d))
+                        .unwrap_or_else(|| "-".to_string()),
+                    entry
+                        .fusillade_batch_id
+                        .as_deref()
+                        .map(|id| id[..8].to_string())
+                        .unwrap_or_else(|| "-".to_string()),
+                ]);
+            }
+
+            println!("{}", table);
+
+            if response.entries.len() as i64 == params.limit {
+                eprintln!(
+                    "\nMore results available. Next page: dw requests --skip {}",
+                    params.skip + params.limit
+                );
+            }
+        }
+    }
+
+    Ok(())
+}
+
 fn format_tokens(n: i64) -> String {
     if n >= 1_000_000 {
         format!("{:.1}M", n as f64 / 1_000_000.0)
@@ -132,4 +224,13 @@ fn format_tokens(n: i64) -> String {
     } else {
         n.to_string()
     }
+}
+
+/// Truncate ISO timestamp to human-readable "YYYY-MM-DD HH:MM:SS".
+fn truncate_timestamp(ts: &str) -> String {
+    ts.replace('T', " ")
+        .split('.')
+        .next()
+        .unwrap_or(ts)
+        .to_string()
 }

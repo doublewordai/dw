@@ -42,3 +42,42 @@ pub struct BatchAnalytics {
     #[serde(default)]
     pub total_cost: Option<String>,
 }
+
+/// A single analytics entry from the requests list.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AnalyticsEntry {
+    pub id: i64,
+    pub timestamp: String,
+    pub method: String,
+    pub uri: String,
+    #[serde(default)]
+    pub model: Option<String>,
+    #[serde(default)]
+    pub status_code: Option<i32>,
+    #[serde(default)]
+    pub duration_ms: Option<i64>,
+    #[serde(default)]
+    pub prompt_tokens: Option<i64>,
+    #[serde(default)]
+    pub completion_tokens: Option<i64>,
+    #[serde(default)]
+    pub total_tokens: Option<i64>,
+    #[serde(default)]
+    pub response_type: Option<String>,
+    #[serde(default)]
+    pub fusillade_batch_id: Option<String>,
+    /// Input price per token as decimal string.
+    #[serde(default)]
+    pub input_price_per_token: Option<String>,
+    /// Output price per token as decimal string.
+    #[serde(default)]
+    pub output_price_per_token: Option<String>,
+    #[serde(default)]
+    pub custom_id: Option<String>,
+}
+
+/// Response containing a list of analytics entries.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ListAnalyticsResponse {
+    pub entries: Vec<AnalyticsEntry>,
+}

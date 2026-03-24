@@ -1,6 +1,6 @@
 use crate::client::{ApiSurface, DwClient};
 use crate::error::DwError;
-use crate::types::usage::{BatchAnalytics, UsageResponse};
+use crate::types::usage::{BatchAnalytics, ListAnalyticsResponse, UsageResponse};
 
 /// Append a UTC time component if the input looks like a bare date (no 'T').
 /// Does not validate the format — invalid strings are forwarded to the API as-is.
@@ -10,6 +10,18 @@ fn normalize_date(date: &str) -> String {
     } else {
         format!("{}T00:00:00Z", date)
     }
+}
+
+/// Parameters for listing requests.
+#[derive(Debug, Default)]
+pub struct ListRequestsParams {
+    pub limit: i64,
+    pub skip: i64,
+    pub model: Option<String>,
+    pub since: Option<String>,
+    pub until: Option<String>,
+    pub batch_id: Option<String>,
+    pub status_code: Option<i32>,
 }
 
 impl DwClient {
@@ -33,6 +45,36 @@ impl DwClient {
         if !query_params.is_empty() {
             request = request.query(&query_params);
         }
+        self.send(request).await
+    }
+
+    /// List recent requests with filtering and pagination.
+    /// Corresponds to `GET /admin/api/v1/requests` (requires platform key + RequestViewer role).
+    pub async fn list_requests(
+        &self,
+        params: &ListRequestsParams,
+    ) -> Result<ListAnalyticsResponse, DwError> {
+        let mut query: Vec<(&str, String)> = Vec::new();
+        query.push(("limit", params.limit.to_string()));
+        query.push(("skip", params.skip.to_string()));
+        if let Some(ref model) = params.model {
+            query.push(("model", model.clone()));
+        }
+        if let Some(ref since) = params.since {
+            query.push(("timestamp_after", normalize_date(since)));
+        }
+        if let Some(ref until) = params.until {
+            query.push(("timestamp_before", normalize_date(until)));
+        }
+        if let Some(ref batch_id) = params.batch_id {
+            query.push(("fusillade_batch_id", batch_id.clone()));
+        }
+        if let Some(ref status) = params.status_code {
+            query.push(("status_code", status.to_string()));
+        }
+        let request = self
+            .get(ApiSurface::Admin, "/admin/api/v1/requests")?
+            .query(&query);
         self.send(request).await
     }
 
