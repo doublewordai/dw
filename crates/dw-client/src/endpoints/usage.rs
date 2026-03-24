@@ -2,8 +2,8 @@ use crate::client::{ApiSurface, DwClient};
 use crate::error::DwError;
 use crate::types::usage::{BatchAnalytics, UsageResponse};
 
-/// Normalize a date string to ISO 8601 with time component.
-/// Accepts "2026-03-01" → "2026-03-01T00:00:00Z" or passes through if already full.
+/// Append a UTC time component if the input looks like a bare date (no 'T').
+/// Does not validate the format — invalid strings are forwarded to the API as-is.
 fn normalize_date(date: &str) -> String {
     if date.contains('T') {
         date.to_string()
@@ -14,6 +14,7 @@ fn normalize_date(date: &str) -> String {
 
 impl DwClient {
     /// Get usage summary for the current user (or active org).
+    /// Corresponds to `GET /admin/api/v1/usage` (requires platform key).
     ///
     /// Optionally filter by date range. Without dates, returns all-time usage.
     pub async fn get_usage(
@@ -36,6 +37,7 @@ impl DwClient {
     }
 
     /// Get analytics for a specific batch (token counts, latency, cost).
+    /// Corresponds to `GET /ai/v1/batches/{batch_id}/analytics` (requires inference key).
     pub async fn get_batch_analytics(&self, batch_id: &str) -> Result<BatchAnalytics, DwError> {
         let request = self.get(
             ApiSurface::Ai,

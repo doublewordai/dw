@@ -10,7 +10,7 @@ pub async fn run(client: &DwClient, args: &UsageArgs, format: OutputFormat) -> a
 
     match format {
         OutputFormat::Json => {
-            println!("{}", serde_json::to_string(&usage)?);
+            println!("{}", serde_json::to_string_pretty(&usage)?);
         }
         OutputFormat::Plain => {
             println!(
@@ -82,7 +82,7 @@ pub async fn batch_analytics(
 
     match format {
         OutputFormat::Json => {
-            println!("{}", serde_json::to_string(&analytics)?);
+            println!("{}", serde_json::to_string_pretty(&analytics)?);
         }
         OutputFormat::Plain => {
             println!(
