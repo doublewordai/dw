@@ -393,11 +393,11 @@ Optional `[client]` section in `~/.dw/config.toml` for tuning HTTP behavior:
 [client]
 timeout_secs = 300          # Request timeout (default: 300s / 5 min)
 connect_timeout_secs = 10   # TCP connect timeout (default: 10s)
-max_retries = 1             # Retries on transient errors (default: 1)
-poll_interval_secs = 2      # Polling interval for watch/stream (default: 2s)
+max_retries = 1             # Retries on transient errors (default: 1, max: 10, 0 = disabled)
+poll_interval_secs = 2      # Polling interval for watch/stream (default: 2s, min: 1s)
 ```
 
-All fields are optional with sensible defaults. Omit the entire `[client]` section or individual fields — defaults apply per-field. Set `max_retries = 0` to disable retries entirely.
+All fields are optional with sensible defaults. Omit the entire `[client]` section or individual fields — defaults apply per-field. Values are clamped: `max_retries` to 0–10, `poll_interval_secs` to minimum 1s, timeouts to minimum 1s.
 
 ## Development
 

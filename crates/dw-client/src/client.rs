@@ -281,7 +281,7 @@ impl DwClient {
                 Ok(r) => r,
                 Err(e) => {
                     if let Some(retry) = next
-                        && (e.is_timeout() || e.is_connect() || e.is_request())
+                        && (e.is_timeout() || e.is_connect())
                     {
                         let delay = Self::backoff_delay(attempt);
                         tracing::warn!(attempt, ?delay, "Network error, retrying: {}", e);
