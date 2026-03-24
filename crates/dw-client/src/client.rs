@@ -254,7 +254,9 @@ impl DwClient {
 
     /// Send a request and parse the JSON response, without retries.
     /// Use this in polling loops that handle their own retry logic.
-    /// On 429, extracts `Retry-After` from headers so callers can honor the delay.
+    /// On 429, determines `Retry-After` by first checking the response headers,
+    /// then falling back to the JSON body, and finally defaulting to 30s if no
+    /// explicit delay is provided, so callers can honor the suggested wait time.
     pub async fn send_once<T: serde::de::DeserializeOwned>(
         &self,
         request: reqwest::RequestBuilder,
