@@ -1,11 +1,14 @@
 use crate::client::{ApiSurface, DwClient};
 use crate::error::DwError;
-use crate::types::usage::{BatchAnalytics, UsageResponse};
+use crate::types::usage::{
+    BatchAnalytics, ListRequestsParams, ListRequestsResponse, UsageResponse,
+};
 
-/// Append a UTC time component if the input looks like a bare date (no 'T').
+/// Append a UTC time component if the input looks like a bare date (YYYY-MM-DD only).
+/// Passes through anything that already contains a time component ('T' or ':').
 /// Does not validate the format — invalid strings are forwarded to the API as-is.
 fn normalize_date(date: &str) -> String {
-    if date.contains('T') {
+    if date.contains('T') || date.contains(':') {
         date.to_string()
     } else {
         format!("{}T00:00:00Z", date)
@@ -33,6 +36,27 @@ impl DwClient {
         if !query_params.is_empty() {
             request = request.query(&query_params);
         }
+        self.send(request).await
+    }
+
+    /// List recent requests with filtering and pagination.
+    /// Corresponds to `GET /admin/api/v1/requests` (requires platform key + RequestViewer role).
+    pub async fn list_requests(
+        &self,
+        params: &ListRequestsParams,
+    ) -> Result<ListRequestsResponse, DwError> {
+        // Normalize date fields before sending
+        let mut normalized = params.clone();
+        if let Some(ref since) = normalized.since {
+            normalized.since = Some(normalize_date(since));
+        }
+        if let Some(ref until) = normalized.until {
+            normalized.until = Some(normalize_date(until));
+        }
+
+        let request = self
+            .get(ApiSurface::Admin, "/admin/api/v1/requests")?
+            .query(&normalized);
         self.send(request).await
     }
 

@@ -42,3 +42,73 @@ pub struct BatchAnalytics {
     #[serde(default)]
     pub total_cost: Option<String>,
 }
+
+/// A single analytics entry from the requests list.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AnalyticsEntry {
+    pub id: i64,
+    pub timestamp: String,
+    pub method: String,
+    pub uri: String,
+    #[serde(default)]
+    pub model: Option<String>,
+    #[serde(default)]
+    pub status_code: Option<u16>,
+    #[serde(default)]
+    pub duration_ms: Option<i64>,
+    #[serde(default)]
+    pub prompt_tokens: Option<i64>,
+    #[serde(default)]
+    pub completion_tokens: Option<i64>,
+    #[serde(default)]
+    pub total_tokens: Option<i64>,
+    #[serde(default)]
+    pub response_type: Option<String>,
+    #[serde(default)]
+    pub fusillade_batch_id: Option<String>,
+    /// Input price per token as decimal string.
+    #[serde(default)]
+    pub input_price_per_token: Option<String>,
+    /// Output price per token as decimal string.
+    #[serde(default)]
+    pub output_price_per_token: Option<String>,
+    #[serde(default)]
+    pub custom_id: Option<String>,
+}
+
+/// Response containing a list of analytics entries.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ListRequestsResponse {
+    pub entries: Vec<AnalyticsEntry>,
+}
+
+/// Query parameters for listing requests.
+#[derive(Debug, Clone, Serialize)]
+pub struct ListRequestsParams {
+    pub limit: u64,
+    pub skip: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none", rename = "timestamp_after")]
+    pub since: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none", rename = "timestamp_before")]
+    pub until: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none", rename = "fusillade_batch_id")]
+    pub batch_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status_code: Option<u16>,
+}
+
+impl Default for ListRequestsParams {
+    fn default() -> Self {
+        Self {
+            limit: 20,
+            skip: 0,
+            model: None,
+            since: None,
+            until: None,
+            batch_id: None,
+            status_code: None,
+        }
+    }
+}

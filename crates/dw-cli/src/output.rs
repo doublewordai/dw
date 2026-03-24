@@ -122,6 +122,18 @@ pub fn format_timestamp(ts: i64) -> String {
         .unwrap_or_else(|| ts.to_string())
 }
 
+/// Best-effort truncation of an ISO timestamp to "YYYY-MM-DD HH:MM:SS".
+/// Strips fractional seconds (splits on '.') and trailing 'Z'.
+/// Does not handle all timezone offset formats (e.g. +00:00 after fractional seconds).
+pub fn truncate_timestamp(ts: &str) -> String {
+    ts.replace('T', " ")
+        .split('.')
+        .next()
+        .unwrap_or(ts)
+        .trim_end_matches('Z')
+        .to_string()
+}
+
 /// Format bytes as human-readable size.
 pub fn format_bytes(bytes: i64) -> String {
     const KB: i64 = 1024;

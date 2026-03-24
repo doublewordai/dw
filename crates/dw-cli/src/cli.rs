@@ -85,6 +85,9 @@ pub enum Commands {
     /// Show usage summary (tokens, cost, requests by model).
     Usage(UsageArgs),
 
+    /// List recent requests (requires RequestViewer role).
+    Requests(RequestsArgs),
+
     /// Create, list, and delete API keys.
     #[command(subcommand)]
     Keys(KeyCommands),
@@ -567,4 +570,29 @@ pub struct UsageArgs {
     /// End date (ISO 8601, e.g. 2026-03-31).
     #[arg(long)]
     pub until: Option<String>,
+}
+
+#[derive(clap::Args)]
+pub struct RequestsArgs {
+    /// Maximum number of requests to return (default: 20, max: 100).
+    #[arg(long, short = 'n', default_value = "20", value_parser = clap::value_parser!(u64).range(1..=100))]
+    pub limit: u64,
+    /// Number of entries to skip (for pagination).
+    #[arg(long, default_value = "0")]
+    pub skip: u64,
+    /// Filter by model name.
+    #[arg(long, short = 'm')]
+    pub model: Option<String>,
+    /// Filter: requests after this date (ISO 8601, e.g. 2026-03-01).
+    #[arg(long)]
+    pub since: Option<String>,
+    /// Filter: requests before this date (ISO 8601).
+    #[arg(long)]
+    pub until: Option<String>,
+    /// Filter by batch ID.
+    #[arg(long)]
+    pub batch_id: Option<String>,
+    /// Filter by HTTP status code (100-599).
+    #[arg(long, value_parser = clap::value_parser!(u16).range(100..=599))]
+    pub status: Option<u16>,
 }

@@ -238,6 +238,10 @@ async fn run() -> anyhow::Result<()> {
 
                 Commands::Usage(args) => commands::usage::run(&client, &args, format).await,
 
+                Commands::Requests(args) => {
+                    commands::usage::list_requests(&client, &args, format).await
+                }
+
                 Commands::Keys(subcmd) => match subcmd {
                     KeyCommands::Create { name, description } => {
                         commands::keys::create(&client, &name, description.as_deref(), format).await

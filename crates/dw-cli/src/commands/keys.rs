@@ -1,4 +1,4 @@
-use crate::output::OutputFormat;
+use crate::output::{OutputFormat, truncate_timestamp};
 use dw_client::DwClient;
 use dw_client::types::keys::CreateApiKeyRequest;
 
@@ -122,13 +122,4 @@ pub async fn delete(client: &DwClient, key_id: &str, yes: bool) -> anyhow::Resul
     client.delete_api_key(key_id).await?;
     eprintln!("Deleted API key: {}", key_id);
     Ok(())
-}
-
-fn truncate_timestamp(ts: &str) -> String {
-    ts.replace('T', " ")
-        .split('.')
-        .next()
-        .unwrap_or(ts)
-        .trim_end_matches('Z')
-        .to_string()
 }
