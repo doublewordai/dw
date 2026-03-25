@@ -156,7 +156,16 @@ fn run_shell_command(cmd: &str, extra_args: &[String], cwd: &Path) -> anyhow::Re
         .args(["-c", &full_cmd])
         .current_dir(cwd)
         .status()
-        .map_err(|e| anyhow::anyhow!("Failed to execute command: {}", e))?;
+        .map_err(|e| {
+            if e.kind() == std::io::ErrorKind::NotFound {
+                anyhow::anyhow!(
+                    "'sh' not found. On Windows, install Git Bash, WSL, or MSYS2. \
+                     On other systems, ensure /bin/sh is available."
+                )
+            } else {
+                anyhow::anyhow!("Failed to execute command: {}", e)
+            }
+        })?;
 
     if !status.success() {
         anyhow::bail!(

@@ -550,49 +550,54 @@ pub fn diff(a: &std::path::Path, b: &std::path::Path, format: OutputFormat) -> a
         hasher.finalize().into()
     }
 
-    // Parse file into a map of custom_id → content SHA-256 hash.
-    let parse_file =
-        |path: &std::path::Path| -> anyhow::Result<std::collections::HashMap<String, [u8; 32]>> {
-            let file = std::fs::File::open(path)?;
-            let reader = std::io::BufReader::new(file);
-            let mut map = std::collections::HashMap::new();
-            let mut parse_errors = 0usize;
-            let mut missing_id = 0usize;
-            let mut duplicates = 0usize;
+    struct ParseResult {
+        map: std::collections::HashMap<String, [u8; 32]>,
+        parse_errors: usize,
+        missing_id: usize,
+        duplicates: usize,
+    }
 
-            for line in reader.lines() {
-                let line = line?;
-                if line.trim().is_empty() {
-                    continue;
-                }
-                match serde_json::from_str::<serde_json::Value>(&line) {
-                    Ok(val) => {
-                        if let Some(id) = val.get("custom_id").and_then(|c| c.as_str()) {
-                            if map.insert(id.to_string(), content_hash(&val)).is_some() {
-                                duplicates += 1;
-                            }
-                        } else {
-                            missing_id += 1;
+    let parse_file = |path: &std::path::Path| -> anyhow::Result<ParseResult> {
+        let file = std::fs::File::open(path)?;
+        let reader = std::io::BufReader::new(file);
+        let mut map = std::collections::HashMap::new();
+        let mut parse_errors = 0usize;
+        let mut missing_id = 0usize;
+        let mut duplicates = 0usize;
+
+        for line in reader.lines() {
+            let line = line?;
+            if line.trim().is_empty() {
+                continue;
+            }
+            match serde_json::from_str::<serde_json::Value>(&line) {
+                Ok(val) => {
+                    if let Some(id) = val.get("custom_id").and_then(|c| c.as_str()) {
+                        if map.insert(id.to_string(), content_hash(&val)).is_some() {
+                            duplicates += 1;
                         }
+                    } else {
+                        missing_id += 1;
                     }
-                    Err(_) => parse_errors += 1,
                 }
+                Err(_) => parse_errors += 1,
             }
+        }
 
-            if parse_errors > 0 || missing_id > 0 || duplicates > 0 {
-                eprintln!(
-                    "Warning: {} ({} parse errors, {} missing custom_id, {} duplicate IDs)",
-                    path.display(),
-                    parse_errors,
-                    missing_id,
-                    duplicates
-                );
-            }
-            Ok(map)
-        };
+        Ok(ParseResult {
+            map,
+            parse_errors,
+            missing_id,
+            duplicates,
+        })
+    };
 
-    let map_a = parse_file(a)?;
-    let map_b = parse_file(b)?;
+    let result_a = parse_file(a)?;
+    let result_b = parse_file(b)?;
+    let map_a = result_a.map;
+    let warnings_a = result_a.parse_errors + result_a.missing_id + result_a.duplicates;
+    let warnings_b = result_b.parse_errors + result_b.missing_id + result_b.duplicates;
+    let map_b = result_b.map;
 
     // Compute counts without allocating key vectors
     let mut only_a_count = 0usize;
@@ -617,7 +622,7 @@ pub fn diff(a: &std::path::Path, b: &std::path::Path, format: OutputFormat) -> a
 
     match format {
         OutputFormat::Json => {
-            let result = serde_json::json!({
+            let mut result = serde_json::json!({
                 "file_a": a.display().to_string(),
                 "file_b": b.display().to_string(),
                 "entries_a": map_a.len(),
@@ -628,6 +633,20 @@ pub fn diff(a: &std::path::Path, b: &std::path::Path, format: OutputFormat) -> a
                 "only_in_a": only_a_count,
                 "only_in_b": only_b_count,
             });
+            if warnings_a > 0 {
+                result["warnings_a"] = serde_json::json!({
+                    "parse_errors": result_a.parse_errors,
+                    "missing_id": result_a.missing_id,
+                    "duplicates": result_a.duplicates,
+                });
+            }
+            if warnings_b > 0 {
+                result["warnings_b"] = serde_json::json!({
+                    "parse_errors": result_b.parse_errors,
+                    "missing_id": result_b.missing_id,
+                    "duplicates": result_b.duplicates,
+                });
+            }
             println!("{}", serde_json::to_string_pretty(&result)?);
         }
         OutputFormat::Plain => {
@@ -649,6 +668,18 @@ pub fn diff(a: &std::path::Path, b: &std::path::Path, format: OutputFormat) -> a
             }
             if only_b_count > 0 {
                 println!("  Only in B:           {}", only_b_count);
+            }
+            if warnings_a > 0 {
+                eprintln!(
+                    "  Warning A: {} parse errors, {} missing ID, {} duplicates",
+                    result_a.parse_errors, result_a.missing_id, result_a.duplicates
+                );
+            }
+            if warnings_b > 0 {
+                eprintln!(
+                    "  Warning B: {} parse errors, {} missing ID, {} duplicates",
+                    result_b.parse_errors, result_b.missing_id, result_b.duplicates
+                );
             }
         }
     }
