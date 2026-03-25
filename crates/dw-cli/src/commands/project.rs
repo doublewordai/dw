@@ -138,43 +138,18 @@ fn shell_escape_posix(arg: &str) -> String {
     format!("'{}'", arg.replace('\'', "'\\''"))
 }
 
-/// Shell-escape a single argument (Windows cmd.exe).
-fn shell_escape_windows(arg: &str) -> String {
-    if arg.is_empty() {
-        return "\"\"".to_string();
-    }
-    if arg
-        .chars()
-        .all(|c| c.is_alphanumeric() || c == '-' || c == '_' || c == '.' || c == '/' || c == ':')
-    {
-        return arg.to_string();
-    }
-    // Wrap in double quotes, double any embedded quotes (cmd.exe convention)
-    format!("\"{}\"", arg.replace('"', "\"\""))
-}
-
 /// Execute a shell command in the manifest's directory, appending escaped extra args.
+/// Uses POSIX sh. On Windows, requires WSL, Git Bash, or MSYS2.
 fn run_shell_command(cmd: &str, extra_args: &[String], cwd: &Path) -> anyhow::Result<()> {
-    let (full_cmd, shell, shell_flag) = if cfg!(target_os = "windows") {
-        let escaped: Vec<String> = extra_args.iter().map(|a| shell_escape_windows(a)).collect();
-        let full = if escaped.is_empty() {
-            cmd.to_string()
-        } else {
-            format!("{} {}", cmd, escaped.join(" "))
-        };
-        (full, "cmd", "/C")
+    let full_cmd = if extra_args.is_empty() {
+        cmd.to_string()
     } else {
         let escaped: Vec<String> = extra_args.iter().map(|a| shell_escape_posix(a)).collect();
-        let full = if escaped.is_empty() {
-            cmd.to_string()
-        } else {
-            format!("{} {}", cmd, escaped.join(" "))
-        };
-        (full, "sh", "-c")
+        format!("{} {}", cmd, escaped.join(" "))
     };
 
-    let status = Command::new(shell)
-        .args([shell_flag, &full_cmd])
+    let status = Command::new("sh")
+        .args(["-c", &full_cmd])
         .current_dir(cwd)
         .status()
         .map_err(|e| anyhow::anyhow!("Failed to execute command: {}", e))?;
