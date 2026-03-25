@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.1.5](https://github.com/doublewordai/dw/compare/v0.1.4...v0.1.5) (2026-03-25)
+
+
+### Features
+
+* dw project for setup and run generic steps, plus jsonl manipulation e… ([#18](https://github.com/doublewordai/dw/issues/18)) ([a7a17c0](https://github.com/doublewordai/dw/commit/a7a17c02ffa280017aaff31eb82534a40c346e42))
+* dw update - get the latest dw binary locally ([#17](https://github.com/doublewordai/dw/issues/17)) ([6cd7b62](https://github.com/doublewordai/dw/commit/6cd7b625e02afca16f80088dc497bb36fd2ac087))
+* release-please trigger ([#20](https://github.com/doublewordai/dw/issues/20)) ([8a1175b](https://github.com/doublewordai/dw/commit/8a1175bd1c100f5d11106d4aef7d3294230e88fb))
+
 ## [0.1.4](https://github.com/doublewordai/dw/compare/v0.1.3...v0.1.4) (2026-03-24)
 
 
