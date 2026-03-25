@@ -79,7 +79,7 @@ impl DwClient {
 
         let mut url = format!("/v1/files/{}/content", file_id);
         if offset > 0 {
-            url = format!("{}?offset={}", url, offset);
+            url = format!("{}?skip={}", url, offset);
         }
 
         let request = self.get(ApiSurface::Ai, &url)?;

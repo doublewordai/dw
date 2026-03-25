@@ -201,9 +201,6 @@ async fn stream_loop(
     let mut offset: usize = 0;
     let mut consecutive_errors: u32 = 0;
     let max_retries = max_retries.min(10);
-    // Track seen custom_ids — the server may not return X-Last-Line on the file
-    // content endpoint, so offset may not advance. Dedup ensures no duplicate output.
-    let mut seen_ids: std::collections::HashSet<String> = std::collections::HashSet::new();
 
     loop {
         // 1. Get batch status
@@ -256,13 +253,10 @@ async fn stream_loop(
                 }) => {
                     consecutive_errors = 0;
                     if !body.is_empty() {
-                        let deduped = dedup_lines(&body, &mut seen_ids);
-                        if !deduped.is_empty() {
-                            let mut out = stdout.lock().await;
-                            out.write_all(deduped.as_bytes())?;
-                            out.flush()?;
-                            drop(out);
-                        }
+                        let mut out = stdout.lock().await;
+                        out.write_all(body.as_bytes())?;
+                        out.flush()?;
+                        drop(out);
                         offset = next_offset;
                     }
                 }
@@ -305,12 +299,9 @@ async fn stream_loop(
                         }) => {
                             drain_errors = 0;
                             if !body.is_empty() {
-                                let deduped = dedup_lines(&body, &mut seen_ids);
-                                if !deduped.is_empty() {
-                                    let mut out = stdout.lock().await;
-                                    out.write_all(deduped.as_bytes())?;
-                                    drop(out);
-                                }
+                                let mut out = stdout.lock().await;
+                                out.write_all(body.as_bytes())?;
+                                drop(out);
                                 offset = next_offset;
                             }
                             if !incomplete {
@@ -366,26 +357,6 @@ async fn stream_loop(
 
         tokio::time::sleep(Duration::from_secs(poll_interval_secs)).await;
     }
-}
-
-/// Filter JSONL body to only include lines with unseen custom_ids.
-fn dedup_lines(body: &str, seen: &mut std::collections::HashSet<String>) -> String {
-    let mut out = String::new();
-    for line in body.lines() {
-        if line.is_empty() {
-            continue;
-        }
-        // Try to extract custom_id for dedup; output lines without custom_id as-is
-        if let Ok(val) = serde_json::from_str::<serde_json::Value>(line)
-            && let Some(cid) = val.get("custom_id").and_then(|c| c.as_str())
-            && !seen.insert(cid.to_string())
-        {
-            continue; // duplicate
-        }
-        out.push_str(line);
-        out.push('\n');
-    }
-    out
 }
 
 /// Compute retry delay: use server's retry_after for rate limits, else exponential backoff.
