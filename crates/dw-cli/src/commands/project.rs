@@ -16,6 +16,9 @@ pub struct ProjectManifest {
 pub struct ProjectInfo {
     pub name: Option<String>,
     pub setup: Option<String>,
+    /// Full workflow instructions shown by `dw project info`.
+    #[serde(default)]
+    pub workflow: Option<Vec<String>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -113,16 +116,25 @@ pub fn info() -> anyhow::Result<()> {
     println!("Setup:   {}", setup_cmd);
     println!();
 
-    if loaded.manifest.steps.is_empty() {
-        println!("No steps defined in dw.toml.");
-    } else {
+    if !loaded.manifest.steps.is_empty() {
         println!("Steps:");
         for (name, step) in &loaded.manifest.steps {
             let desc = step.description.as_deref().unwrap_or(&step.run);
             println!("  {:<20} {}", name, desc);
         }
         println!();
-        println!("Run with: dw project run <step> [args...]");
+    }
+
+    // Show workflow if defined and non-empty
+    if let Some(ref project) = loaded.manifest.project
+        && let Some(ref workflow) = project.workflow
+        && !workflow.is_empty()
+    {
+        println!("Workflow:");
+        for (i, step) in workflow.iter().enumerate() {
+            println!("  {}. {}", i + 1, step);
+        }
+        println!();
     }
 
     Ok(())

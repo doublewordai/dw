@@ -62,6 +62,71 @@ impl DwClient {
         self.send_bytes(request).await
     }
 
+    /// Fetch file content from an offset, returning new content and pagination state.
+    ///
+    /// Corresponds to `GET /v1/files/{file_id}/content?offset={offset}`.
+    /// The server uses `X-Last-Line` to indicate the next offset and `X-Incomplete`
+    /// to signal whether more content may follow.
+    ///
+    /// Returns `FileContentChunk::NotReady` on 404 (output file not yet created).
+    /// Used for streaming batch results as they complete.
+    pub async fn get_file_content_stream(
+        &self,
+        file_id: &str,
+        offset: usize,
+    ) -> Result<crate::types::files::FileContentChunk, DwError> {
+        use crate::types::files::FileContentChunk;
+
+        let mut url = format!("/v1/files/{}/content", file_id);
+        if offset > 0 {
+            url = format!("{}?offset={}", url, offset);
+        }
+
+        let request = self.get(ApiSurface::Ai, &url)?;
+        let response = request.send().await?;
+
+        if response.status() == reqwest::StatusCode::NOT_FOUND {
+            if offset == 0 {
+                // File not created yet — normal during early polling
+                return Ok(FileContentChunk::NotReady);
+            }
+            // 404 after we've already read data = file deleted or wrong ID
+            return Err(DwError::from_response(response).await);
+        }
+
+        if response.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
+            let retry_after = DwClient::extract_retry_after(response).await;
+            return Err(DwError::RateLimited {
+                retry_after: Some(retry_after),
+            });
+        }
+
+        if !response.status().is_success() {
+            return Err(DwError::from_response(response).await);
+        }
+
+        let incomplete = response
+            .headers()
+            .get("x-incomplete")
+            .and_then(|v| v.to_str().ok())
+            .is_some_and(|v| v == "true");
+
+        let next_offset = response
+            .headers()
+            .get("x-last-line")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|v| v.parse::<usize>().ok())
+            .unwrap_or(offset);
+
+        let body = response.text().await?;
+
+        Ok(FileContentChunk::Data {
+            body,
+            next_offset,
+            incomplete,
+        })
+    }
+
     /// Get cost estimate for processing a file.
     ///
     /// Corresponds to `GET /v1/files/{file_id}/cost-estimate`.

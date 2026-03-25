@@ -52,6 +52,24 @@ pub struct ModelCostBreakdown {
 }
 
 /// Response wrapper for file list (OpenAI-compatible cursor pagination).
+/// Result from streaming file content with offset.
+#[derive(Debug)]
+pub enum FileContentChunk {
+    /// New content available.
+    Data {
+        /// The JSONL content (may be multiple lines).
+        body: String,
+        /// Offset to use for the next request (from X-Last-Line header).
+        next_offset: usize,
+        /// Whether more content may follow (from X-Incomplete header).
+        incomplete: bool,
+    },
+    /// File does not exist yet (404). The output file is created when the
+    /// first results arrive — this is normal during early polling.
+    NotReady,
+}
+
+/// Paginated response from listing files.
 #[derive(Debug, Deserialize)]
 pub struct FileListResponse {
     #[serde(default)]
