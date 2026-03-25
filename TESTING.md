@@ -431,7 +431,72 @@ dw files list --account nonexistent
 dw login --org acme-corp --as prod
 ```
 
-## 16. Error Handling
+## 16. Project Commands
+
+Test from inside a directory with a `dw.toml` (e.g. a cloned example):
+
+```bash
+# Create a test dw.toml
+cat > /tmp/test-project/dw.toml << 'EOF'
+[project]
+name = "test-project"
+setup = "echo setup done"
+
+[steps.prepare]
+description = "Generate test data"
+run = "echo preparing data"
+
+[steps.analyze]
+description = "Analyze results"
+run = "echo analyzing"
+EOF
+
+cd /tmp/test-project
+
+# Show project info and available steps
+dw project info
+
+# Run setup
+dw project setup
+
+# Run a named step
+dw project run prepare
+
+# Run with extra args (passed through to the command)
+dw project run prepare --verbose
+
+# Error: unknown step
+dw project run nonexistent
+```
+
+## 17. JSONL Manipulation
+
+```bash
+# Create a test file
+echo '{"custom_id":"a","method":"POST","url":"/v1/chat/completions","body":{"messages":[{"role":"user","content":"Hello"}]}}' > /tmp/test.jsonl
+echo '{"custom_id":"b","method":"POST","url":"/v1/chat/completions","body":{"messages":[{"role":"user","content":"World"}]}}' >> /tmp/test.jsonl
+
+# Stats (works without auth)
+dw files stats /tmp/test.jsonl
+dw files stats /tmp/test.jsonl --output json
+
+# Sample
+dw files sample /tmp/test.jsonl -n 1
+
+# Split
+dw files split /tmp/test.jsonl --chunk-size 1
+
+# Merge
+dw files merge /tmp/test-001.jsonl /tmp/test-002.jsonl -o /tmp/merged.jsonl
+
+# Diff (create two result files)
+echo '{"custom_id":"a","response":{"body":{"choices":[{"message":{"content":"Hi"}}]}}}' > /tmp/results-a.jsonl
+echo '{"custom_id":"a","response":{"body":{"choices":[{"message":{"content":"Hey"}}]}}}' > /tmp/results-b.jsonl
+dw files diff /tmp/results-a.jsonl /tmp/results-b.jsonl
+dw files diff /tmp/results-a.jsonl /tmp/results-b.jsonl --output json
+```
+
+## 18. Error Handling
 
 ```bash
 # Nonexistent resource (use valid UUID format to get 404, not 400)
