@@ -3,7 +3,7 @@ name = "dw-client"
 description = "Doubleword API client library"
 # Explicit version (not workspace) — release-please cannot parse version.workspace = true.
 # The cargo-workspace plugin keeps all crate versions in sync on release.
-version = "0.1.7"
+version = "0.1.8"
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
