@@ -64,7 +64,20 @@ pub async fn run() -> anyhow::Result<()> {
         .send()
         .await?
         .error_for_status()
-        .map_err(|e| anyhow::anyhow!("Download failed ({}): {}", format_http_error(&e), e))?
+        .map_err(|e| {
+            if e.status() == Some(reqwest::StatusCode::NOT_FOUND) {
+                anyhow::anyhow!(
+                    "Binary '{}' not found for v{}. It may still be building — try again \
+                     in a few minutes.\nRelease: https://github.com/{}/releases/tag/v{}",
+                    artifact,
+                    latest_clean,
+                    REPO,
+                    latest_clean
+                )
+            } else {
+                anyhow::anyhow!("Download failed ({}): {}", format_http_error(&e), e)
+            }
+        })?
         .bytes()
         .await?;
 
