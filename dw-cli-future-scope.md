@@ -133,12 +133,21 @@ Items consciously deferred from v1. Revisit after initial release and internal t
 - Homebrew formula in a dedicated tap repo
 - Auto-updated on release via CI
 
-## JSONL Advanced Manipulation
-- `dw files split <path> --chunk-size 1000` — split large files
-- `dw files merge <paths...>` — combine multiple JSONL files
-- `dw files sample <path> -n 10` — random sample for testing
-- `dw files diff <path1> <path2>` — compare JSONL files
-- `dw files stats <path>` — token count estimates, model distribution, request count
+## JSONL Result-to-Input Transformation / Templating
+- Transform batch result JSONL into new input JSONL for multi-stage pipelines
+- Template system: define how to extract content from results and build new prompts
+- Example: stage 1 outputs scenarios → template builds stage 2 conversation prompts from them
+- Could use Handlebars/Tera templates or a custom DSL
+- Enables fully CLI-native multi-stage pipelines without Python between stages
+- Related: parfold-style LLM primitives (summarize, search, sort) as CLI operations
+- `dw files transform results.jsonl --template stage2.toml -o stage2-input.jsonl`
+
+## Declarative Pipeline Execution
+- `dw pipeline run pipeline.toml` — sequential multi-stage batch execution from manifest
+- Each stage: optional prepare command → `dw stream` → pass results to next stage
+- `{prev_results}` variable substitution between stages
+- Progress tracking across the full pipeline
+- DAG support for parallel stages with dependencies
 
 ## Batch Analytics (Post-Completion)
 - `dw batches analytics <id>` — latency distribution, error rates, throughput

@@ -6,6 +6,7 @@ pub mod examples;
 pub mod files;
 pub mod keys;
 pub mod models;
+pub mod project;
 pub mod realtime;
 pub mod stream;
 pub mod update;

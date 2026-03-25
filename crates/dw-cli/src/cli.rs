@@ -100,6 +100,10 @@ pub enum Commands {
     #[command(subcommand)]
     Examples(ExampleCommands),
 
+    /// Run project steps defined in dw.toml.
+    #[command(subcommand)]
+    Project(ProjectCommands),
+
     /// Update dw to the latest release.
     Update,
 
@@ -264,6 +268,65 @@ pub enum FileCommands {
     },
     /// Transform a local JSONL file (model override, params, image encoding).
     Prepare(FilePrepareArgs),
+    /// Show stats for a local JSONL file (line count, models, estimated tokens).
+    Stats {
+        /// Path to JSONL file.
+        path: PathBuf,
+    },
+    /// Extract a random sample from a JSONL file.
+    Sample {
+        /// Path to JSONL file.
+        path: PathBuf,
+        /// Number of lines to sample (required, >= 1).
+        #[arg(long, short = 'n')]
+        count: usize,
+        /// Output file (default: stdout).
+        #[arg(long, short = 'o')]
+        output_file: Option<PathBuf>,
+    },
+    /// Merge multiple JSONL files into one.
+    Merge {
+        /// Input JSONL files.
+        #[arg(required = true)]
+        paths: Vec<PathBuf>,
+        /// Output file (default: stdout).
+        #[arg(long, short = 'o')]
+        output_file: Option<PathBuf>,
+    },
+    /// Split a JSONL file into chunks.
+    Split {
+        /// Path to JSONL file.
+        path: PathBuf,
+        /// Maximum lines per chunk.
+        #[arg(long, default_value = "1000")]
+        chunk_size: usize,
+        /// Output directory (default: same as input).
+        #[arg(long, short = 'o')]
+        output_dir: Option<PathBuf>,
+    },
+    /// Compare two JSONL result files by custom_id.
+    Diff {
+        /// First JSONL file.
+        a: PathBuf,
+        /// Second JSONL file.
+        b: PathBuf,
+    },
+}
+
+impl FileCommands {
+    /// Whether this subcommand is a local operation (no API call needed).
+    pub fn is_local(&self) -> bool {
+        matches!(
+            self,
+            FileCommands::Validate { .. }
+                | FileCommands::Prepare(_)
+                | FileCommands::Stats { .. }
+                | FileCommands::Sample { .. }
+                | FileCommands::Merge { .. }
+                | FileCommands::Split { .. }
+                | FileCommands::Diff { .. }
+        )
+    }
 }
 
 #[derive(clap::Args)]
@@ -555,6 +618,24 @@ pub enum ExampleCommands {
         #[arg(long, short = 'd')]
         dir: Option<PathBuf>,
     },
+}
+
+// --- Project ---
+
+#[derive(Subcommand)]
+pub enum ProjectCommands {
+    /// Run project setup (e.g. install dependencies).
+    Setup,
+    /// Run a named project step from dw.toml.
+    Run {
+        /// Step name (e.g. "prepare", "analyze").
+        step: String,
+        /// Extra arguments passed to the step command.
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
+    },
+    /// Show available project steps.
+    Info,
 }
 
 // --- Completions ---
