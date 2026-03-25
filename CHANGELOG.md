@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.7](https://github.com/doublewordai/dw/compare/v0.1.6...v0.1.7) (2026-03-25)
+
+
+### Bug Fixes
+
+* better warning when uodating during a release ([#23](https://github.com/doublewordai/dw/issues/23)) ([c0af798](https://github.com/doublewordai/dw/commit/c0af798b763e7214ca5f0f9ec02f6dfb8b8aad69))
+
 ## [0.1.6](https://github.com/doublewordai/dw/compare/v0.1.5...v0.1.6) (2026-03-25)
 
 
