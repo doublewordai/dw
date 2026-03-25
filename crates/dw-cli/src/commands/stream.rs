@@ -185,8 +185,11 @@ async fn stream_with_multi(
     .await
 }
 
-/// Core streaming loop: poll for completed results and write to stdout.
-/// Retries transient network errors with exponential backoff.
+/// Core streaming loop: poll batch status and stream results from the output file.
+///
+/// Uses the file content endpoint with byte offsets (like autobatcher) — this gives
+/// stable pagination without duplicates, unlike skip-based pagination on a growing
+/// result set.
 async fn stream_loop(
     client: &DwClient,
     batch_id: &str,
@@ -195,58 +198,12 @@ async fn stream_loop(
     poll_interval_secs: u64,
     max_retries: u32,
 ) -> anyhow::Result<()> {
-    let mut cursor: usize = 0;
-    let page_size: usize = 100;
+    let mut offset: usize = 0;
     let mut consecutive_errors: u32 = 0;
-    // Clamp to sane range; 0 means no retries for polling errors
     let max_retries = max_retries.min(10);
 
     loop {
-        // Fetch results page — retry only transient errors
-        let page = match client
-            .get_batch_results_page(batch_id, cursor, page_size, Some("completed"))
-            .await
-        {
-            Ok(p) => {
-                consecutive_errors = 0;
-                p
-            }
-            Err(e) if e.is_transient() => {
-                consecutive_errors += 1;
-                if consecutive_errors > max_retries {
-                    bar.abandon_with_message(format!("{} — connection lost", batch_id));
-                    anyhow::bail!("Lost connection after {} retries: {}", max_retries, e);
-                }
-                let delay = if let dw_client::DwError::RateLimited {
-                    retry_after: Some(secs),
-                } = &e
-                {
-                    *secs
-                } else {
-                    2u64.saturating_pow(consecutive_errors).min(60)
-                };
-                bar.set_message(format!(
-                    "{} — retrying ({}/{})",
-                    batch_id, consecutive_errors, max_retries
-                ));
-                tokio::time::sleep(Duration::from_secs(delay)).await;
-                continue;
-            }
-            Err(e) => {
-                bar.abandon_with_message(format!("{} — error", batch_id));
-                return Err(e.into());
-            }
-        };
-
-        if !page.body.is_empty() {
-            let mut out = stdout.lock().await;
-            out.write_all(page.body.as_bytes())?;
-            out.flush()?;
-            drop(out);
-            cursor = page.last_line;
-        }
-
-        // Fetch batch status — retry only transient errors
+        // 1. Get batch status
         let batch = match client.get_batch_once(batch_id).await {
             Ok(b) => {
                 consecutive_errors = 0;
@@ -258,14 +215,7 @@ async fn stream_loop(
                     bar.abandon_with_message(format!("{} — connection lost", batch_id));
                     anyhow::bail!("Lost connection after {} retries: {}", max_retries, e);
                 }
-                let delay = if let dw_client::DwError::RateLimited {
-                    retry_after: Some(secs),
-                } = &e
-                {
-                    *secs
-                } else {
-                    2u64.saturating_pow(consecutive_errors).min(60)
-                };
+                let delay = transient_delay(&e, consecutive_errors);
                 bar.set_message(format!(
                     "{} — retrying ({}/{})",
                     batch_id, consecutive_errors, max_retries
@@ -278,6 +228,8 @@ async fn stream_loop(
                 return Err(e.into());
             }
         };
+
+        // Update progress bar
         if let Some(rc) = &batch.request_counts {
             let done = (rc.completed + rc.failed) as u64;
             let total = rc.total as u64;
@@ -293,52 +245,77 @@ async fn stream_loop(
             bar.set_message(format!("{} — {}{}", batch_id, batch.status, failed_str));
         }
 
-        if batch.is_terminal() {
-            // Drain remaining results with transient retry
-            let mut drain_errors: u32 = 0;
-            loop {
-                let final_page = match client
-                    .get_batch_results_page(batch_id, cursor, page_size, Some("completed"))
-                    .await
-                {
-                    Ok(p) => {
-                        drain_errors = 0;
-                        p
+        // 2. Stream results from the output file (if available)
+        if let Some(ref output_file_id) = batch.output_file_id {
+            match client.get_file_content_stream(output_file_id, offset).await {
+                Ok((body, new_offset, _incomplete)) => {
+                    consecutive_errors = 0;
+                    if !body.is_empty() {
+                        let mut out = stdout.lock().await;
+                        out.write_all(body.as_bytes())?;
+                        out.flush()?;
+                        drop(out);
+                        offset = new_offset;
                     }
-                    Err(e) if e.is_transient() => {
-                        drain_errors += 1;
-                        if drain_errors > max_retries {
-                            bar.abandon_with_message(format!("{} — drain failed", batch_id));
-                            anyhow::bail!(
-                                "Failed to drain results after {} retries: {}",
-                                max_retries,
-                                e
-                            );
-                        }
-                        let delay = if let dw_client::DwError::RateLimited {
-                            retry_after: Some(secs),
-                        } = &e
-                        {
-                            *secs
-                        } else {
-                            2u64.saturating_pow(drain_errors).min(60)
-                        };
-                        tokio::time::sleep(Duration::from_secs(delay)).await;
-                        continue;
-                    }
-                    Err(e) => {
-                        bar.abandon_with_message(format!("{} — error", batch_id));
-                        return Err(e.into());
-                    }
-                };
-                if !final_page.body.is_empty() {
-                    let mut out = stdout.lock().await;
-                    out.write_all(final_page.body.as_bytes())?;
-                    drop(out);
-                    cursor = final_page.last_line;
                 }
-                if !final_page.incomplete {
-                    break;
+                Err(e) if e.is_transient() => {
+                    consecutive_errors += 1;
+                    if consecutive_errors > max_retries {
+                        bar.abandon_with_message(format!("{} — connection lost", batch_id));
+                        anyhow::bail!("Lost connection after {} retries: {}", max_retries, e);
+                    }
+                    let delay = transient_delay(&e, consecutive_errors);
+                    bar.set_message(format!(
+                        "{} — retrying ({}/{})",
+                        batch_id, consecutive_errors, max_retries
+                    ));
+                    tokio::time::sleep(Duration::from_secs(delay)).await;
+                    continue;
+                }
+                Err(_) => {
+                    // Non-transient error fetching results — skip this poll, try again next round
+                }
+            }
+        }
+
+        // 3. Check if batch is done
+        if batch.is_terminal() {
+            // Final drain — fetch any remaining content
+            if let Some(ref output_file_id) = batch.output_file_id {
+                let mut drain_errors: u32 = 0;
+                loop {
+                    match client.get_file_content_stream(output_file_id, offset).await {
+                        Ok((body, new_offset, incomplete)) => {
+                            drain_errors = 0;
+                            if !body.is_empty() {
+                                let mut out = stdout.lock().await;
+                                out.write_all(body.as_bytes())?;
+                                drop(out);
+                                offset = new_offset;
+                            }
+                            if !incomplete {
+                                break;
+                            }
+                        }
+                        Err(e) if e.is_transient() => {
+                            drain_errors += 1;
+                            if drain_errors > max_retries {
+                                bar.abandon_with_message(format!("{} — drain failed", batch_id));
+                                anyhow::bail!(
+                                    "Failed to drain results after {} retries: {}",
+                                    max_retries,
+                                    e
+                                );
+                            }
+                            let delay = transient_delay(&e, drain_errors);
+                            tokio::time::sleep(Duration::from_secs(delay)).await;
+                            continue;
+                        }
+                        Err(e) => {
+                            bar.abandon_with_message(format!("{} — error", batch_id));
+                            return Err(e.into());
+                        }
+                    }
                 }
             }
             stdout.lock().await.flush()?;
@@ -352,6 +329,18 @@ async fn stream_loop(
         }
 
         tokio::time::sleep(Duration::from_secs(poll_interval_secs)).await;
+    }
+}
+
+/// Compute retry delay: use server's retry_after for rate limits, else exponential backoff.
+fn transient_delay(e: &dw_client::DwError, attempt: u32) -> u64 {
+    if let dw_client::DwError::RateLimited {
+        retry_after: Some(secs),
+    } = e
+    {
+        *secs
+    } else {
+        2u64.saturating_pow(attempt).min(60)
     }
 }
 
