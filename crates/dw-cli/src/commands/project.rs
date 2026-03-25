@@ -125,9 +125,10 @@ pub fn info() -> anyhow::Result<()> {
         println!();
     }
 
-    // Show workflow if defined
+    // Show workflow if defined and non-empty
     if let Some(ref project) = loaded.manifest.project
         && let Some(ref workflow) = project.workflow
+        && !workflow.is_empty()
     {
         println!("Workflow:");
         for (i, step) in workflow.iter().enumerate() {

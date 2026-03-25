@@ -86,7 +86,12 @@ impl DwClient {
         let response = request.send().await?;
 
         if response.status() == reqwest::StatusCode::NOT_FOUND {
-            return Ok(FileContentChunk::NotReady);
+            if offset == 0 {
+                // File not created yet — normal during early polling
+                return Ok(FileContentChunk::NotReady);
+            }
+            // 404 after we've already read data = file deleted or wrong ID
+            return Err(DwError::from_response(response).await);
         }
 
         if response.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {

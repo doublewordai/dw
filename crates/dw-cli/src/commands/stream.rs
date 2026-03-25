@@ -187,9 +187,9 @@ async fn stream_with_multi(
 
 /// Core streaming loop: poll batch status and stream results from the output file.
 ///
-/// Uses the file content endpoint with byte offsets (like autobatcher) — this gives
-/// stable pagination without duplicates, unlike skip-based pagination on a growing
-/// result set.
+/// Uses the file content endpoint with line offsets (like autobatcher) — the server
+/// tracks progress via X-Last-Line, giving stable pagination without duplicates,
+/// unlike skip-based pagination on a growing result set.
 async fn stream_loop(
     client: &DwClient,
     batch_id: &str,
@@ -313,8 +313,16 @@ async fn stream_loop(
                             }
                         }
                         Ok(dw_client::types::files::FileContentChunk::NotReady) => {
-                            // Batch is terminal but file doesn't exist — no results to drain
-                            break;
+                            // File not ready yet — may be eventual consistency lag.
+                            // Retry a few times before giving up.
+                            drain_errors += 1;
+                            if drain_errors > 5 {
+                                // Genuinely no output file — batch may have failed before
+                                // producing any results.
+                                break;
+                            }
+                            tokio::time::sleep(Duration::from_secs(1)).await;
+                            continue;
                         }
                         Err(e) if e.is_transient() => {
                             drain_errors += 1;

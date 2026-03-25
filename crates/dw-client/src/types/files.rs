@@ -69,6 +69,7 @@ pub enum FileContentChunk {
     NotReady,
 }
 
+/// Paginated response from listing files.
 #[derive(Debug, Deserialize)]
 pub struct FileListResponse {
     #[serde(default)]
