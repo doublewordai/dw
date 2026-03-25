@@ -67,7 +67,11 @@ pub async fn run() -> anyhow::Result<()> {
         .map_err(|e| {
             if e.status() == Some(reqwest::StatusCode::NOT_FOUND) {
                 anyhow::anyhow!(
-                    "v{} is released but binaries are still building. Try again in a few minutes.",
+                    "Binary '{}' not found for v{}. It may still be building — try again \
+                     in a few minutes.\nRelease: https://github.com/{}/releases/tag/v{}",
+                    artifact,
+                    latest_clean,
+                    REPO,
                     latest_clean
                 )
             } else {
