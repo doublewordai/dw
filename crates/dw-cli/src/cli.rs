@@ -313,6 +313,22 @@ pub enum FileCommands {
     },
 }
 
+impl FileCommands {
+    /// Whether this subcommand is a local operation (no API call needed).
+    pub fn is_local(&self) -> bool {
+        matches!(
+            self,
+            FileCommands::Validate { .. }
+                | FileCommands::Prepare(_)
+                | FileCommands::Stats { .. }
+                | FileCommands::Sample { .. }
+                | FileCommands::Merge { .. }
+                | FileCommands::Split { .. }
+                | FileCommands::Diff { .. }
+        )
+    }
+}
+
 #[derive(clap::Args)]
 pub struct FileUploadArgs {
     /// Path to JSONL file.

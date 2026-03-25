@@ -106,15 +106,7 @@ async fn run() -> anyhow::Result<()> {
         },
 
         // --- Local file commands (no auth needed) ---
-        Commands::Files(
-            ref subcmd @ (FileCommands::Validate { .. }
-            | FileCommands::Prepare(_)
-            | FileCommands::Stats { .. }
-            | FileCommands::Sample { .. }
-            | FileCommands::Merge { .. }
-            | FileCommands::Split { .. }
-            | FileCommands::Diff { .. }),
-        ) => match subcmd {
+        Commands::Files(ref subcmd) if subcmd.is_local() => match subcmd {
             FileCommands::Validate { path } => commands::files::validate(path),
             FileCommands::Prepare(args) => commands::files::prepare(args).await,
             FileCommands::Stats { path } => commands::files::stats(path, format),
@@ -219,14 +211,8 @@ async fn run() -> anyhow::Result<()> {
                         )
                         .await
                     }
-                    // Local file commands handled above (pre-auth)
-                    FileCommands::Validate { .. }
-                    | FileCommands::Prepare(_)
-                    | FileCommands::Stats { .. }
-                    | FileCommands::Sample { .. }
-                    | FileCommands::Merge { .. }
-                    | FileCommands::Split { .. }
-                    | FileCommands::Diff { .. } => unreachable!(),
+                    // Local file commands handled in pre-auth branch via is_local()
+                    _ => unreachable!("local file commands handled before auth"),
                 },
 
                 Commands::Batches(subcmd) => match subcmd {

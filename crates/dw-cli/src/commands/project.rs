@@ -99,15 +99,19 @@ pub fn run(step: &str, extra_args: &[String]) -> anyhow::Result<()> {
 pub fn info() -> anyhow::Result<()> {
     let loaded = load_manifest()?;
 
-    if let Some(ref project) = loaded.manifest.project {
-        if let Some(ref name) = project.name {
-            println!("Project: {}", name);
-        }
-        if let Some(ref setup) = project.setup {
-            println!("Setup:   {}", setup);
-        }
-        println!();
+    if let Some(ref project) = loaded.manifest.project
+        && let Some(ref name) = project.name
+    {
+        println!("Project: {}", name);
     }
+    let setup_cmd = loaded
+        .manifest
+        .project
+        .as_ref()
+        .and_then(|p| p.setup.as_deref())
+        .unwrap_or("uv sync");
+    println!("Setup:   {}", setup_cmd);
+    println!();
 
     if loaded.manifest.steps.is_empty() {
         println!("No steps defined in dw.toml.");
