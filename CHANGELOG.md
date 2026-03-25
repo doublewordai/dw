@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.6](https://github.com/doublewordai/dw/compare/v0.1.5...v0.1.6) (2026-03-25)
+
+
+### Bug Fixes
+
+* project instructions, plus fixed the stream to poll the output file ([#21](https://github.com/doublewordai/dw/issues/21)) ([f9e5e88](https://github.com/doublewordai/dw/commit/f9e5e880a32834bffbd3c94cb9c8b3d47107ad1a))
+
 ## [0.1.5](https://github.com/doublewordai/dw/compare/v0.1.4...v0.1.5) (2026-03-25)
 
 
