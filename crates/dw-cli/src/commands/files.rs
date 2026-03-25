@@ -592,12 +592,12 @@ pub fn diff(a: &std::path::Path, b: &std::path::Path, format: OutputFormat) -> a
         })
     };
 
-    let result_a = parse_file(a)?;
-    let result_b = parse_file(b)?;
-    let map_a = result_a.map;
-    let warnings_a = result_a.parse_errors + result_a.missing_id + result_a.duplicates;
-    let warnings_b = result_b.parse_errors + result_b.missing_id + result_b.duplicates;
-    let map_b = result_b.map;
+    let pa = parse_file(a)?;
+    let pb = parse_file(b)?;
+    let (map_a, errs_a, miss_a, dups_a) = (pa.map, pa.parse_errors, pa.missing_id, pa.duplicates);
+    let (map_b, errs_b, miss_b, dups_b) = (pb.map, pb.parse_errors, pb.missing_id, pb.duplicates);
+    let warnings_a = errs_a + miss_a + dups_a;
+    let warnings_b = errs_b + miss_b + dups_b;
 
     // Compute counts without allocating key vectors
     let mut only_a_count = 0usize;
@@ -635,16 +635,16 @@ pub fn diff(a: &std::path::Path, b: &std::path::Path, format: OutputFormat) -> a
             });
             if warnings_a > 0 {
                 result["warnings_a"] = serde_json::json!({
-                    "parse_errors": result_a.parse_errors,
-                    "missing_id": result_a.missing_id,
-                    "duplicates": result_a.duplicates,
+                    "parse_errors": errs_a,
+                    "missing_id": miss_a,
+                    "duplicates": dups_a,
                 });
             }
             if warnings_b > 0 {
                 result["warnings_b"] = serde_json::json!({
-                    "parse_errors": result_b.parse_errors,
-                    "missing_id": result_b.missing_id,
-                    "duplicates": result_b.duplicates,
+                    "parse_errors": errs_b,
+                    "missing_id": miss_b,
+                    "duplicates": dups_b,
                 });
             }
             println!("{}", serde_json::to_string_pretty(&result)?);
@@ -672,13 +672,13 @@ pub fn diff(a: &std::path::Path, b: &std::path::Path, format: OutputFormat) -> a
             if warnings_a > 0 {
                 eprintln!(
                     "  Warning A: {} parse errors, {} missing ID, {} duplicates",
-                    result_a.parse_errors, result_a.missing_id, result_a.duplicates
+                    errs_a, miss_a, dups_a
                 );
             }
             if warnings_b > 0 {
                 eprintln!(
                     "  Warning B: {} parse errors, {} missing ID, {} duplicates",
-                    result_b.parse_errors, result_b.missing_id, result_b.duplicates
+                    errs_b, miss_b, dups_b
                 );
             }
         }
