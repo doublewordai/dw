@@ -62,16 +62,21 @@ impl DwClient {
         self.send_bytes(request).await
     }
 
-    /// Fetch file content from a byte offset, returning new content and pagination headers.
+    /// Fetch file content from an offset, returning new content and pagination state.
     ///
     /// Corresponds to `GET /v1/files/{file_id}/content?offset={offset}`.
-    /// Returns (body, last_line_offset, is_incomplete).
+    /// The server uses `X-Last-Line` to indicate the next offset and `X-Incomplete`
+    /// to signal whether more content may follow.
+    ///
+    /// Returns `FileContentChunk::NotReady` on 404 (output file not yet created).
     /// Used for streaming batch results as they complete.
     pub async fn get_file_content_stream(
         &self,
         file_id: &str,
         offset: usize,
-    ) -> Result<(String, usize, bool), DwError> {
+    ) -> Result<crate::types::files::FileContentChunk, DwError> {
+        use crate::types::files::FileContentChunk;
+
         let mut url = format!("/v1/files/{}/content", file_id);
         if offset > 0 {
             url = format!("{}?offset={}", url, offset);
@@ -81,8 +86,7 @@ impl DwClient {
         let response = request.send().await?;
 
         if response.status() == reqwest::StatusCode::NOT_FOUND {
-            // File not ready yet (output file may not exist until first results arrive)
-            return Ok((String::new(), offset, true));
+            return Ok(FileContentChunk::NotReady);
         }
 
         if response.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
@@ -102,7 +106,7 @@ impl DwClient {
             .and_then(|v| v.to_str().ok())
             .is_some_and(|v| v == "true");
 
-        let last_line = response
+        let next_offset = response
             .headers()
             .get("x-last-line")
             .and_then(|v| v.to_str().ok())
@@ -111,7 +115,11 @@ impl DwClient {
 
         let body = response.text().await?;
 
-        Ok((body, last_line, incomplete))
+        Ok(FileContentChunk::Data {
+            body,
+            next_offset,
+            incomplete,
+        })
     }
 
     /// Get cost estimate for processing a file.

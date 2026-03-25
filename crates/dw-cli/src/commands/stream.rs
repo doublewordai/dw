@@ -248,15 +248,21 @@ async fn stream_loop(
         // 2. Stream results from the output file (if available)
         if let Some(ref output_file_id) = batch.output_file_id {
             match client.get_file_content_stream(output_file_id, offset).await {
-                Ok((body, new_offset, _incomplete)) => {
+                Ok(dw_client::types::files::FileContentChunk::Data {
+                    body, next_offset, ..
+                }) => {
                     consecutive_errors = 0;
                     if !body.is_empty() {
                         let mut out = stdout.lock().await;
                         out.write_all(body.as_bytes())?;
                         out.flush()?;
                         drop(out);
-                        offset = new_offset;
+                        offset = next_offset;
                     }
+                }
+                Ok(dw_client::types::files::FileContentChunk::NotReady) => {
+                    // Output file not created yet — normal during early polling
+                    consecutive_errors = 0;
                 }
                 Err(e) if e.is_transient() => {
                     consecutive_errors += 1;
@@ -272,30 +278,43 @@ async fn stream_loop(
                     tokio::time::sleep(Duration::from_secs(delay)).await;
                     continue;
                 }
-                Err(_) => {
-                    // Non-transient error fetching results — skip this poll, try again next round
+                Err(e) => {
+                    bar.abandon_with_message(format!("{} — error", batch_id));
+                    return Err(e.into());
                 }
             }
         }
 
         // 3. Check if batch is done
         if batch.is_terminal() {
-            // Final drain — fetch any remaining content
+            // Final drain — fetch any remaining content from the output file
             if let Some(ref output_file_id) = batch.output_file_id {
                 let mut drain_errors: u32 = 0;
                 loop {
                     match client.get_file_content_stream(output_file_id, offset).await {
-                        Ok((body, new_offset, incomplete)) => {
+                        Ok(dw_client::types::files::FileContentChunk::Data {
+                            body,
+                            next_offset,
+                            incomplete,
+                        }) => {
                             drain_errors = 0;
                             if !body.is_empty() {
                                 let mut out = stdout.lock().await;
                                 out.write_all(body.as_bytes())?;
                                 drop(out);
-                                offset = new_offset;
+                                offset = next_offset;
                             }
                             if !incomplete {
                                 break;
                             }
+                            // Incomplete but no new data — brief pause to avoid tight loop
+                            if body.is_empty() {
+                                tokio::time::sleep(Duration::from_millis(500)).await;
+                            }
+                        }
+                        Ok(dw_client::types::files::FileContentChunk::NotReady) => {
+                            // Batch is terminal but file doesn't exist — no results to drain
+                            break;
                         }
                         Err(e) if e.is_transient() => {
                             drain_errors += 1;
