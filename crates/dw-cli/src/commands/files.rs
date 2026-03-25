@@ -531,7 +531,8 @@ pub fn split(
 }
 
 /// Compare two JSONL result files by custom_id.
-/// Both files are streamed line-by-line; only a content hash (u64) is stored per entry.
+/// Both files are streamed line-by-line. A SHA-256 digest of each response's content
+/// is stored per custom_id for memory-efficient comparison.
 pub fn diff(a: &std::path::Path, b: &std::path::Path, format: OutputFormat) -> anyhow::Result<()> {
     use sha2::{Digest, Sha256};
 
@@ -644,9 +645,8 @@ pub fn diff(a: &std::path::Path, b: &std::path::Path, format: OutputFormat) -> a
     Ok(())
 }
 
-/// Extract response content string for comparison.
 /// Extract response content as a canonical string for hashing.
-/// Handles both string content and multimodal array content.
+/// String content is returned as-is; array/multimodal content is serialized to JSON.
 fn extract_content(val: &serde_json::Value) -> String {
     let content = val
         .get("response")
