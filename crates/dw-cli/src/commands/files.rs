@@ -469,7 +469,14 @@ pub fn split(
         anyhow::bail!("Chunk size must be at least 1.");
     }
 
-    let dir = output_dir.unwrap_or_else(|| path.parent().unwrap_or(std::path::Path::new(".")));
+    let dir = output_dir.unwrap_or_else(|| {
+        let parent = path.parent().unwrap_or(std::path::Path::new("."));
+        if parent.as_os_str().is_empty() {
+            std::path::Path::new(".")
+        } else {
+            parent
+        }
+    });
     std::fs::create_dir_all(dir)?;
 
     let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("chunk");
@@ -551,6 +558,7 @@ pub fn diff(a: &std::path::Path, b: &std::path::Path, format: OutputFormat) -> a
             let mut map = std::collections::HashMap::new();
             let mut parse_errors = 0usize;
             let mut missing_id = 0usize;
+            let mut duplicates = 0usize;
 
             for line in reader.lines() {
                 let line = line?;
@@ -560,7 +568,9 @@ pub fn diff(a: &std::path::Path, b: &std::path::Path, format: OutputFormat) -> a
                 match serde_json::from_str::<serde_json::Value>(&line) {
                     Ok(val) => {
                         if let Some(id) = val.get("custom_id").and_then(|c| c.as_str()) {
-                            map.insert(id.to_string(), content_hash(&val));
+                            if map.insert(id.to_string(), content_hash(&val)).is_some() {
+                                duplicates += 1;
+                            }
                         } else {
                             missing_id += 1;
                         }
@@ -569,12 +579,13 @@ pub fn diff(a: &std::path::Path, b: &std::path::Path, format: OutputFormat) -> a
                 }
             }
 
-            if parse_errors > 0 || missing_id > 0 {
+            if parse_errors > 0 || missing_id > 0 || duplicates > 0 {
                 eprintln!(
-                    "Warning: {} ({} parse errors, {} missing custom_id)",
+                    "Warning: {} ({} parse errors, {} missing custom_id, {} duplicate IDs)",
                     path.display(),
                     parse_errors,
-                    missing_id
+                    missing_id,
+                    duplicates
                 );
             }
             Ok(map)

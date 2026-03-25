@@ -105,6 +105,36 @@ async fn run() -> anyhow::Result<()> {
             ConfigCommands::ResetUrls => commands::config::reset_urls(&mut config),
         },
 
+        // --- Local file commands (no auth needed) ---
+        Commands::Files(
+            ref subcmd @ (FileCommands::Validate { .. }
+            | FileCommands::Prepare(_)
+            | FileCommands::Stats { .. }
+            | FileCommands::Sample { .. }
+            | FileCommands::Merge { .. }
+            | FileCommands::Split { .. }
+            | FileCommands::Diff { .. }),
+        ) => match subcmd {
+            FileCommands::Validate { path } => commands::files::validate(path),
+            FileCommands::Prepare(args) => commands::files::prepare(args).await,
+            FileCommands::Stats { path } => commands::files::stats(path, format),
+            FileCommands::Sample {
+                path,
+                count,
+                output_file,
+            } => commands::files::sample(path, *count, output_file.as_deref()),
+            FileCommands::Merge { paths, output_file } => {
+                commands::files::merge(paths, output_file.as_deref())
+            }
+            FileCommands::Split {
+                path,
+                chunk_size,
+                output_dir,
+            } => commands::files::split(path, *chunk_size, output_dir.as_deref()),
+            FileCommands::Diff { a, b } => commands::files::diff(a, b, format),
+            _ => unreachable!(),
+        },
+
         // --- Account commands (local operations) ---
         Commands::Account(subcmd) => match subcmd {
             AccountCommands::List => {
@@ -189,23 +219,14 @@ async fn run() -> anyhow::Result<()> {
                         )
                         .await
                     }
-                    FileCommands::Validate { path } => commands::files::validate(&path),
-                    FileCommands::Prepare(args) => commands::files::prepare(&args).await,
-                    FileCommands::Stats { path } => commands::files::stats(&path, format),
-                    FileCommands::Sample {
-                        path,
-                        count,
-                        output_file,
-                    } => commands::files::sample(&path, count, output_file.as_deref()),
-                    FileCommands::Merge { paths, output_file } => {
-                        commands::files::merge(&paths, output_file.as_deref())
-                    }
-                    FileCommands::Split {
-                        path,
-                        chunk_size,
-                        output_dir,
-                    } => commands::files::split(&path, chunk_size, output_dir.as_deref()),
-                    FileCommands::Diff { a, b } => commands::files::diff(&a, &b, format),
+                    // Local file commands handled above (pre-auth)
+                    FileCommands::Validate { .. }
+                    | FileCommands::Prepare(_)
+                    | FileCommands::Stats { .. }
+                    | FileCommands::Sample { .. }
+                    | FileCommands::Merge { .. }
+                    | FileCommands::Split { .. }
+                    | FileCommands::Diff { .. } => unreachable!(),
                 },
 
                 Commands::Batches(subcmd) => match subcmd {
