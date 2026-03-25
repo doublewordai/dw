@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.8](https://github.com/doublewordai/dw/compare/v0.1.7...v0.1.8) (2026-03-25)
+
+
+### Bug Fixes
+
+* streaming duplicates entries on polls ([#25](https://github.com/doublewordai/dw/issues/25)) ([db7390e](https://github.com/doublewordai/dw/commit/db7390e4117dc05e781e7755afe64880f7fde677))
+
 ## [0.1.7](https://github.com/doublewordai/dw/compare/v0.1.6...v0.1.7) (2026-03-25)
 
 
