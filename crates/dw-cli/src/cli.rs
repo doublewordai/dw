@@ -486,6 +486,10 @@ pub struct BatchRunArgs {
     /// Watch progress after creating the batch.
     #[arg(long)]
     pub watch: bool,
+
+    /// Write batch ID(s) to a file (one per line).
+    #[arg(long)]
+    pub output_id: Option<PathBuf>,
 }
 
 // --- Stream ---

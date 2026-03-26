@@ -296,9 +296,11 @@ pub fn init(
     };
 
     // Interactive SDK selection if no --with flags and using Python templates
-    // Prompt for SDKs interactively if none specified via --with and using a Python template
+    // Only prompt for SDKs in fully interactive mode (no flags provided at all)
     let effective_sdks: Vec<String> = if with_sdks.is_empty()
         && interactive
+        && name.is_none()
+        && template.is_none()
         && matches!(template_name.as_str(), "single-batch" | "pipeline")
     {
         eprintln!("\nOptional SDKs (enter numbers, comma-separated, or press Enter to skip):");
@@ -576,7 +578,8 @@ workflow = [
     "dw project run prepare",
     "dw files stats batches/batch.jsonl",
     "dw files prepare batches/batch.jsonl --model Qwen/Qwen3-VL-30B-A3B-Instruct-FP8",
-    "dw stream batches/batch.jsonl > results.jsonl",
+    "dw batches run batches/batch.jsonl --watch --output-id .batch-id",
+    "dw batches results $(cat .batch-id) -o results.jsonl",
     "dw project run analyze",
     "dw usage",
 ]
@@ -660,7 +663,8 @@ workflow = [
     "dw project run prepare",
     "dw files stats batches/batch.jsonl",
     "dw files prepare batches/batch.jsonl --model Qwen/Qwen3-VL-30B-A3B-Instruct-FP8",
-    "dw stream batches/batch.jsonl > results.jsonl",
+    "dw batches run batches/batch.jsonl --watch --output-id .batch-id",
+    "dw batches results $(cat .batch-id) -o results.jsonl",
     "dw project run analyze -- -r results.jsonl",
     "dw usage",
 ]
@@ -694,10 +698,12 @@ workflow = [
     "dw project run prepare-stage1",
     "dw files stats batches/stage1.jsonl",
     "dw files prepare batches/stage1.jsonl --model Qwen/Qwen3-VL-30B-A3B-Instruct-FP8",
-    "dw stream batches/stage1.jsonl > results/stage1.jsonl",
+    "dw batches run batches/stage1.jsonl --watch --output-id .batch-id",
+    "dw batches results $(cat .batch-id) -o results/stage1.jsonl",
     "dw project run transform -- --input results/stage1.jsonl",
     "dw files prepare batches/stage2.jsonl --model Qwen/Qwen3-VL-30B-A3B-Instruct-FP8",
-    "dw stream batches/stage2.jsonl > results/stage2.jsonl",
+    "dw batches run batches/stage2.jsonl --watch --output-id .batch-id",
+    "dw batches results $(cat .batch-id) -o results/stage2.jsonl",
     "dw project run analyze -- -r results/stage2.jsonl",
     "dw usage",
 ]

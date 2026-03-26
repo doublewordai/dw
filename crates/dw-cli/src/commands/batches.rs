@@ -196,6 +196,7 @@ pub async fn run(
     };
 
     let mut watch_handles: Vec<tokio::task::JoinHandle<anyhow::Result<()>>> = Vec::new();
+    let mut batch_ids: Vec<String> = Vec::new();
 
     for path in &paths {
         let upload_path = if args.model.is_some() {
@@ -246,6 +247,7 @@ pub async fn run(
         spinner.enable_steady_tick(std::time::Duration::from_millis(100));
         let batch = client.create_batch(&request).await?;
         spinner.finish_with_message(format!("Created batch: {}", batch.id));
+        batch_ids.push(batch.id.clone());
 
         if args.watch {
             // Spawn watch immediately — runs concurrently while we upload the next file
@@ -264,6 +266,15 @@ pub async fn run(
             }));
         } else {
             print_item(&batch, format);
+        }
+    }
+
+    // Write batch IDs to file if requested
+    if let Some(ref id_path) = args.output_id {
+        use std::io::Write;
+        let mut f = std::fs::File::create(id_path)?;
+        for id in &batch_ids {
+            writeln!(f, "{}", id)?;
         }
     }
 
