@@ -359,7 +359,13 @@ pub fn init(
         "minimal" => {
             generate_minimal(dir, &project_name)?;
         }
-        _ => {
+        other => {
+            if template.is_some() {
+                anyhow::bail!(
+                    "Unknown template '{}'. Options: single-batch, pipeline, shell, minimal",
+                    other
+                );
+            }
             generate_single_batch(dir, &project_name, &effective_sdks)?;
         }
     }
@@ -404,7 +410,9 @@ pub fn run_all(from: usize, continue_run: bool) -> anyhow::Result<()> {
         .iter()
         .enumerate()
         .map(|(i, s)| (i + 1, s.trim()))
-        .filter(|(_, s)| *s != "dw project setup" && !s.starts_with("dw project setup "))
+        .filter(|(_, s)| {
+            !s.is_empty() && *s != "dw project setup" && !s.starts_with("dw project setup ")
+        })
         .collect();
 
     // Determine start point
