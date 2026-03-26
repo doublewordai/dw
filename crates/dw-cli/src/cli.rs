@@ -624,6 +624,17 @@ pub enum ExampleCommands {
 
 #[derive(Subcommand)]
 pub enum ProjectCommands {
+    /// Create a new project with scaffolding and hello-world example.
+    Init {
+        /// Project name (used for directory and package name).
+        name: Option<String>,
+        /// Template: single-batch, pipeline, shell, or minimal.
+        #[arg(long, short = 't')]
+        template: Option<String>,
+        /// Add optional SDK dependencies (repeatable: autobatcher, parfold).
+        #[arg(long = "with", value_name = "SDK")]
+        with_sdks: Vec<String>,
+    },
     /// Run project setup (e.g. install dependencies).
     Setup,
     /// Run a named project step from dw.toml.
@@ -634,7 +645,13 @@ pub enum ProjectCommands {
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         args: Vec<String>,
     },
-    /// Show available project steps.
+    /// Run all workflow steps sequentially.
+    RunAll {
+        /// Start from step N (1-indexed, skips earlier steps).
+        #[arg(long, default_value = "1")]
+        from: usize,
+    },
+    /// Show available project steps and workflow.
     Info,
 }
 

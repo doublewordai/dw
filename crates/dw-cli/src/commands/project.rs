@@ -140,6 +140,598 @@ pub fn info() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Initialize a new project with scaffolding.
+pub fn init(
+    name: Option<&str>,
+    template: Option<&str>,
+    with_sdks: &[String],
+) -> anyhow::Result<()> {
+    use std::io::Write;
+
+    // Interactive name prompt if not provided
+    let project_name = if let Some(n) = name {
+        n.to_string()
+    } else {
+        eprint!("Project name: ");
+        std::io::stderr().flush()?;
+        let mut input = String::new();
+        std::io::stdin().read_line(&mut input)?;
+        let trimmed = input.trim().to_string();
+        if trimmed.is_empty() {
+            anyhow::bail!("Project name is required.");
+        }
+        trimmed
+    };
+
+    // Interactive template selection if not provided
+    let template_name = if let Some(t) = template {
+        t.to_string()
+    } else {
+        eprintln!("\nTemplate:");
+        eprintln!("  1. single-batch  — prepare → submit → analyze (default)");
+        eprintln!("  2. pipeline      — multi-stage with transform between batches");
+        eprintln!("  3. shell         — bash scripts, no Python");
+        eprintln!("  4. minimal       — just dw.toml and directories");
+        eprint!("\nChoice [1]: ");
+        std::io::stderr().flush()?;
+        let mut input = String::new();
+        std::io::stdin().read_line(&mut input)?;
+        match input.trim() {
+            "" | "1" | "single-batch" => "single-batch".to_string(),
+            "2" | "pipeline" => "pipeline".to_string(),
+            "3" | "shell" => "shell".to_string(),
+            "4" | "minimal" => "minimal".to_string(),
+            other => {
+                eprintln!("Unknown template '{}', using single-batch.", other);
+                "single-batch".to_string()
+            }
+        }
+    };
+
+    let dir = Path::new(&project_name);
+    if dir.exists() {
+        anyhow::bail!("Directory '{}' already exists.", project_name);
+    }
+
+    // Create directories
+    std::fs::create_dir_all(dir.join("output"))?;
+    std::fs::create_dir_all(dir.join("results"))?;
+
+    let slug = project_name.replace(['-', ' '], "_");
+
+    // Generate files based on template
+    match template_name.as_str() {
+        "single-batch" => {
+            generate_single_batch(dir, &project_name, &slug, with_sdks)?;
+        }
+        "pipeline" => {
+            generate_pipeline(dir, &project_name, &slug, with_sdks)?;
+        }
+        "shell" => {
+            generate_shell(dir, &project_name)?;
+        }
+        "minimal" => {
+            generate_minimal(dir, &project_name)?;
+        }
+        _ => {
+            generate_single_batch(dir, &project_name, &slug, with_sdks)?;
+        }
+    }
+
+    eprintln!("\nCreated {}/", project_name);
+    eprintln!("  dw.toml          Project manifest");
+    match template_name.as_str() {
+        "shell" => {
+            eprintln!("  scripts/         Shell scripts");
+        }
+        "minimal" => {}
+        _ => {
+            eprintln!("  pyproject.toml   Python dependencies");
+            eprintln!("  src/             Project source code");
+        }
+    }
+    eprintln!("  output/          Batch files");
+    eprintln!("  results/         Results");
+    eprintln!("\nGet started:");
+    eprintln!("  cd {}", project_name);
+    eprintln!("  dw project info");
+
+    Ok(())
+}
+
+/// Run all workflow steps sequentially (skipping setup).
+pub fn run_all(from: usize) -> anyhow::Result<()> {
+    let loaded = load_manifest()?;
+    let workflow = loaded
+        .manifest
+        .project
+        .as_ref()
+        .and_then(|p| p.workflow.as_ref())
+        .ok_or_else(|| anyhow::anyhow!("No workflow defined in dw.toml."))?;
+
+    if workflow.is_empty() {
+        anyhow::bail!("Workflow is empty in dw.toml.");
+    }
+
+    let start = from.saturating_sub(1); // 1-indexed → 0-indexed
+    if start >= workflow.len() {
+        anyhow::bail!(
+            "Step {} is out of range (workflow has {} steps).",
+            from,
+            workflow.len()
+        );
+    }
+
+    for (i, step) in workflow.iter().enumerate().skip(start) {
+        // Skip setup steps in run-all
+        let trimmed = step.trim();
+        if trimmed == "dw project setup" || trimmed.starts_with("dw project setup ") {
+            continue;
+        }
+
+        eprintln!("\n[{}/{}] {}", i + 1, workflow.len(), step);
+        run_shell_command(trimmed, &[], &loaded.dir)?;
+    }
+
+    eprintln!("\nAll steps completed.");
+    Ok(())
+}
+
+// ===== Template generators =====
+
+fn write_file(path: &Path, content: &str) -> anyhow::Result<()> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::write(path, content)?;
+    Ok(())
+}
+
+fn generate_minimal(dir: &Path, name: &str) -> anyhow::Result<()> {
+    write_file(
+        &dir.join("dw.toml"),
+        &format!(
+            r#"[project]
+name = "{name}"
+"#
+        ),
+    )
+}
+
+fn generate_shell(dir: &Path, name: &str) -> anyhow::Result<()> {
+    std::fs::create_dir_all(dir.join("scripts"))?;
+
+    write_file(
+        &dir.join("dw.toml"),
+        &format!(
+            r#"[project]
+name = "{name}"
+setup = "echo 'No setup needed for shell projects'"
+workflow = [
+    "dw project run prepare",
+    "dw files stats output/batch.jsonl",
+    "dw files prepare output/batch.jsonl --model <model>",
+    "dw stream output/batch.jsonl > results.jsonl",
+    "dw project run analyze",
+    "dw usage",
+]
+
+[steps.prepare]
+description = "Generate batch JSONL"
+run = "bash scripts/prepare.sh"
+
+[steps.analyze]
+description = "Analyze results"
+run = "bash scripts/analyze.sh"
+"#
+        ),
+    )?;
+
+    write_file(
+        &dir.join("scripts/prepare.sh"),
+        r#"#!/bin/bash
+# Generate batch-ready JSONL. Edit this to load your data and build prompts.
+set -e
+
+mkdir -p output
+
+cat > output/batch.jsonl << 'JSONL'
+{"custom_id":"hello-0","method":"POST","url":"/v1/chat/completions","body":{"messages":[{"role":"user","content":"What is the capital of France?"}]}}
+{"custom_id":"hello-1","method":"POST","url":"/v1/chat/completions","body":{"messages":[{"role":"user","content":"What is the capital of Japan?"}]}}
+{"custom_id":"hello-2","method":"POST","url":"/v1/chat/completions","body":{"messages":[{"role":"user","content":"What is the capital of Brazil?"}]}}
+{"custom_id":"hello-3","method":"POST","url":"/v1/chat/completions","body":{"messages":[{"role":"user","content":"What is the capital of Australia?"}]}}
+{"custom_id":"hello-4","method":"POST","url":"/v1/chat/completions","body":{"messages":[{"role":"user","content":"What is the capital of Egypt?"}]}}
+JSONL
+
+echo "Created output/batch.jsonl (5 requests)"
+"#,
+    )?;
+
+    write_file(
+        &dir.join("scripts/analyze.sh"),
+        r#"#!/bin/bash
+# Analyze batch results. Edit this to process your outputs.
+set -e
+
+if [ ! -f results.jsonl ]; then
+    echo "Error: results.jsonl not found. Run the batch first."
+    exit 1
+fi
+
+echo "Results:"
+wc -l results.jsonl
+echo ""
+echo "First result:"
+head -1 results.jsonl | python3 -m json.tool 2>/dev/null || head -1 results.jsonl
+"#,
+    )?;
+
+    // Make scripts executable
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(
+            dir.join("scripts/prepare.sh"),
+            std::fs::Permissions::from_mode(0o755),
+        )?;
+        std::fs::set_permissions(
+            dir.join("scripts/analyze.sh"),
+            std::fs::Permissions::from_mode(0o755),
+        )?;
+    }
+
+    Ok(())
+}
+
+fn generate_single_batch(
+    dir: &Path,
+    name: &str,
+    slug: &str,
+    with_sdks: &[String],
+) -> anyhow::Result<()> {
+    write_file(
+        &dir.join("dw.toml"),
+        &format!(
+            r#"[project]
+name = "{name}"
+setup = "uv sync"
+workflow = [
+    "dw project setup",
+    "dw project run prepare",
+    "dw files stats output/batch.jsonl",
+    "dw files prepare output/batch.jsonl --model <model>",
+    "dw stream output/batch.jsonl > results.jsonl",
+    "dw project run analyze -- -r results.jsonl",
+    "dw usage",
+]
+
+[steps.prepare]
+description = "Generate batch JSONL from your data"
+run = "uv run {name} prepare"
+
+[steps.analyze]
+description = "Analyze batch results"
+run = "uv run {name} analyze"
+"#
+        ),
+    )?;
+
+    generate_pyproject(dir, name, slug, with_sdks)?;
+    generate_single_batch_cli(dir, slug)?;
+
+    Ok(())
+}
+
+fn generate_pipeline(
+    dir: &Path,
+    name: &str,
+    slug: &str,
+    with_sdks: &[String],
+) -> anyhow::Result<()> {
+    write_file(
+        &dir.join("dw.toml"),
+        &format!(
+            r#"[project]
+name = "{name}"
+setup = "uv sync"
+workflow = [
+    "dw project setup",
+    "dw project run prepare-stage1",
+    "dw files stats output/stage1.jsonl",
+    "dw files prepare output/stage1.jsonl --model <model>",
+    "dw stream output/stage1.jsonl > results/stage1.jsonl",
+    "dw project run transform -- --input results/stage1.jsonl",
+    "dw files prepare output/stage2.jsonl --model <model>",
+    "dw stream output/stage2.jsonl > results/stage2.jsonl",
+    "dw project run analyze -- -r results/stage2.jsonl",
+    "dw usage",
+]
+
+[steps.prepare-stage1]
+description = "Generate batch JSONL for stage 1"
+run = "uv run {name} prepare-stage1"
+
+[steps.transform]
+description = "Transform stage 1 results into stage 2 inputs"
+run = "uv run {name} transform"
+
+[steps.analyze]
+description = "Analyze final results"
+run = "uv run {name} analyze"
+"#
+        ),
+    )?;
+
+    generate_pyproject(dir, name, slug, with_sdks)?;
+    generate_pipeline_cli(dir, slug)?;
+
+    Ok(())
+}
+
+fn generate_pyproject(
+    dir: &Path,
+    name: &str,
+    _slug: &str,
+    with_sdks: &[String],
+) -> anyhow::Result<()> {
+    let mut deps = vec!["    \"click>=8.0\"".to_string()];
+    for sdk in with_sdks {
+        match sdk.as_str() {
+            "autobatcher" => deps.push("    \"autobatcher>=0.1\"".to_string()),
+            "parfold" => deps.push("    \"parfold>=0.1\"".to_string()),
+            other => eprintln!("Warning: unknown SDK '{}', skipping.", other),
+        }
+    }
+
+    write_file(
+        &dir.join("pyproject.toml"),
+        &format!(
+            r#"[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[project]
+name = "{name}"
+version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = [
+{deps}
+]
+
+[project.scripts]
+{name} = "src.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+"#,
+            deps = deps.join(",\n")
+        ),
+    )
+}
+
+fn generate_single_batch_cli(dir: &Path, _slug: &str) -> anyhow::Result<()> {
+    write_file(&dir.join("src/__init__.py"), "")?;
+
+    write_file(
+        &dir.join("src/cli.py"),
+        r#""""Batch inference project. Edit prepare() and analyze() for your use case."""
+
+import json
+from pathlib import Path
+
+import click
+
+
+@click.group()
+def cli():
+    """Batch inference project."""
+    pass
+
+
+@cli.command()
+@click.option("--output", "-o", default="output/batch.jsonl", help="Output JSONL file")
+def prepare(output):
+    """Generate batch-ready JSONL. Edit this for your data and prompts."""
+    output_path = Path(output)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # TODO: Replace with your data loading and prompt building
+    prompts = [
+        "What is the capital of France?",
+        "Explain quantum computing in one sentence.",
+        "Write a haiku about batch inference.",
+        "What is the largest ocean on Earth?",
+        "Name three programming languages created in the 1990s.",
+        "What causes rain?",
+        "Summarize the plot of Romeo and Juliet in two sentences.",
+        "What is the speed of light in km/s?",
+        "Explain what an API is to a five-year-old.",
+        "What year did the first iPhone launch?",
+    ]
+
+    with open(output_path, "w") as f:
+        for i, prompt in enumerate(prompts):
+            line = {
+                "custom_id": f"request-{i:04d}",
+                "method": "POST",
+                "url": "/v1/chat/completions",
+                "body": {
+                    "messages": [{"role": "user", "content": prompt}],
+                    "max_tokens": 256,
+                },
+            }
+            f.write(json.dumps(line) + "\n")
+
+    click.echo(f"Created {output_path} ({len(prompts)} requests)")
+
+
+@cli.command()
+@click.option("--results", "-r", required=True, help="Results JSONL file")
+def analyze(results):
+    """Analyze batch results. Edit this for your analysis logic."""
+    results_path = Path(results)
+    if not results_path.exists():
+        raise click.ClickException(f"Results file not found: {results_path}")
+
+    count = 0
+    errors = 0
+    with open(results_path) as f:
+        for line in f:
+            if not line.strip():
+                continue
+            obj = json.loads(line)
+            # Handle both response formats (Doubleword and OpenAI)
+            rb = obj.get("response_body") or obj.get("response", {}).get("body", {})
+            choices = rb.get("choices", [])
+            if choices:
+                content = choices[0].get("message", {}).get("content", "")
+                click.echo(f"[{obj['custom_id']}] {content[:100]}...")
+                count += 1
+            elif obj.get("error"):
+                errors += 1
+
+    click.echo(f"\n{count} results, {errors} errors")
+
+
+def main():
+    cli()
+"#,
+    )
+}
+
+fn generate_pipeline_cli(dir: &Path, _slug: &str) -> anyhow::Result<()> {
+    write_file(&dir.join("src/__init__.py"), "")?;
+
+    write_file(
+        &dir.join("src/cli.py"),
+        r#""""Multi-stage batch pipeline. Edit the stages for your use case."""
+
+import json
+from pathlib import Path
+
+import click
+
+
+@click.group()
+def cli():
+    """Multi-stage batch inference pipeline."""
+    pass
+
+
+@cli.command("prepare-stage1")
+@click.option("--output", "-o", default="output/stage1.jsonl", help="Output JSONL file")
+def prepare_stage1(output):
+    """Generate batch JSONL for stage 1. Edit this for your data."""
+    output_path = Path(output)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # TODO: Replace with your data loading
+    items = [
+        "The history of artificial intelligence",
+        "Climate change and its effects on agriculture",
+        "The evolution of programming languages",
+        "Space exploration milestones",
+        "The future of renewable energy",
+    ]
+
+    with open(output_path, "w") as f:
+        for i, item in enumerate(items):
+            line = {
+                "custom_id": f"stage1-{i:04d}",
+                "method": "POST",
+                "url": "/v1/chat/completions",
+                "body": {
+                    "messages": [
+                        {"role": "user", "content": f"Write a brief summary about: {item}"}
+                    ],
+                    "max_tokens": 512,
+                },
+            }
+            f.write(json.dumps(line) + "\n")
+
+    click.echo(f"Created {output_path} ({len(items)} requests)")
+
+
+@cli.command()
+@click.option("--input", "-i", "input_path", required=True, help="Stage 1 results JSONL")
+@click.option("--output", "-o", default="output/stage2.jsonl", help="Output JSONL file")
+def transform(input_path, output):
+    """Transform stage 1 results into stage 2 inputs.
+
+    This is where you read the previous stage's outputs and build
+    new prompts for the next stage. Edit for your pipeline logic.
+    """
+    input_file = Path(input_path)
+    output_path = Path(output)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    results = []
+    with open(input_file) as f:
+        for line in f:
+            if line.strip():
+                results.append(json.loads(line))
+
+    click.echo(f"Loaded {len(results)} stage 1 results")
+
+    # TODO: Replace with your transformation logic
+    with open(output_path, "w") as f:
+        for i, result in enumerate(results):
+            # Extract the summary from stage 1
+            rb = result.get("response_body") or result.get("response", {}).get("body", {})
+            choices = rb.get("choices", [])
+            summary = choices[0]["message"]["content"] if choices else ""
+
+            # Build stage 2 prompt using stage 1 output
+            line = {
+                "custom_id": f"stage2-{i:04d}",
+                "method": "POST",
+                "url": "/v1/chat/completions",
+                "body": {
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": f"Given this summary:\n\n{summary}\n\n"
+                            "List the 3 most important facts mentioned.",
+                        }
+                    ],
+                    "max_tokens": 256,
+                },
+            }
+            f.write(json.dumps(line) + "\n")
+
+    click.echo(f"Created {output_path} ({len(results)} requests)")
+
+
+@cli.command()
+@click.option("--results", "-r", required=True, help="Final results JSONL file")
+def analyze(results):
+    """Analyze final pipeline results."""
+    results_path = Path(results)
+    if not results_path.exists():
+        raise click.ClickException(f"Results file not found: {results_path}")
+
+    count = 0
+    with open(results_path) as f:
+        for line in f:
+            if not line.strip():
+                continue
+            obj = json.loads(line)
+            rb = obj.get("response_body") or obj.get("response", {}).get("body", {})
+            choices = rb.get("choices", [])
+            if choices:
+                content = choices[0].get("message", {}).get("content", "")
+                click.echo(f"[{obj['custom_id']}] {content[:120]}...")
+                count += 1
+
+    click.echo(f"\n{count} final results")
+
+
+def main():
+    cli()
+"#,
+    )
+}
+
 /// Shell-escape a single argument (POSIX).
 fn shell_escape_posix(arg: &str) -> String {
     if arg.is_empty() {
