@@ -117,8 +117,41 @@ pub fn info() -> anyhow::Result<()> {
     println!();
 
     if !loaded.manifest.steps.is_empty() {
+        // Display steps in workflow order (fall back to alphabetical for unlisted steps)
+        let workflow_order: Vec<&str> = loaded
+            .manifest
+            .project
+            .as_ref()
+            .and_then(|p| p.workflow.as_ref())
+            .map(|w| {
+                w.iter()
+                    .filter_map(|line| {
+                        // Extract step name from "dw project run <step> ..."
+                        let parts: Vec<&str> = line.split_whitespace().collect();
+                        if parts.len() >= 4
+                            && parts[0] == "dw"
+                            && parts[1] == "project"
+                            && parts[2] == "run"
+                        {
+                            Some(parts[3])
+                        } else {
+                            None
+                        }
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        let mut ordered_steps: Vec<(&String, &StepDef)> = loaded.manifest.steps.iter().collect();
+        ordered_steps.sort_by_key(|(name, _)| {
+            workflow_order
+                .iter()
+                .position(|w| *w == name.as_str())
+                .unwrap_or(usize::MAX)
+        });
+
         println!("Steps:");
-        for (name, step) in &loaded.manifest.steps {
+        for (name, step) in &ordered_steps {
             let desc = step.description.as_deref().unwrap_or(&step.run);
             println!("  {:<20} {}", name, desc);
         }
@@ -188,6 +221,45 @@ pub fn init(
         }
     };
 
+    // Interactive SDK selection if no --with flags and using Python templates
+    let effective_sdks: Vec<String> = if with_sdks.is_empty()
+        && template.is_none()
+        && matches!(template_name.as_str(), "single-batch" | "pipeline")
+    {
+        eprintln!("\nOptional SDKs (enter numbers, comma-separated, or press Enter to skip):");
+        eprintln!("  1. autobatcher  — automatic batching behind an async OpenAI client");
+        eprintln!("  2. parfold      — LLM-powered data primitives (sort, filter, map)");
+        eprint!("\nInclude [none]: ");
+        std::io::stderr().flush()?;
+        let mut input = String::new();
+        std::io::stdin().read_line(&mut input)?;
+        let mut sdks = Vec::new();
+        for part in input.trim().split(',') {
+            match part.trim() {
+                "1" | "autobatcher" => sdks.push("autobatcher".to_string()),
+                "2" | "parfold" => sdks.push("parfold".to_string()),
+                "" => {}
+                _ => {}
+            }
+        }
+        sdks
+    } else {
+        with_sdks.to_vec()
+    };
+
+    // Validate name: no path separators, control chars, or characters that break TOML/Python
+    if project_name.contains('/')
+        || project_name.contains('\\')
+        || project_name.contains('"')
+        || project_name.contains('\'')
+        || project_name.chars().any(|c| c.is_control())
+    {
+        anyhow::bail!(
+            "Invalid project name '{}'. Avoid path separators, quotes, and control characters.",
+            project_name
+        );
+    }
+
     let dir = Path::new(&project_name);
     if dir.exists() {
         anyhow::bail!("Directory '{}' already exists.", project_name);
@@ -195,17 +267,17 @@ pub fn init(
 
     // Create directories
     std::fs::create_dir_all(dir.join("output"))?;
-    std::fs::create_dir_all(dir.join("results"))?;
 
+    // Slug for Python package name (no hyphens/spaces)
     let slug = project_name.replace(['-', ' '], "_");
 
     // Generate files based on template
     match template_name.as_str() {
         "single-batch" => {
-            generate_single_batch(dir, &project_name, &slug, with_sdks)?;
+            generate_single_batch(dir, &project_name, &slug, &effective_sdks)?;
         }
         "pipeline" => {
-            generate_pipeline(dir, &project_name, &slug, with_sdks)?;
+            generate_pipeline(dir, &project_name, &slug, &effective_sdks)?;
         }
         "shell" => {
             generate_shell(dir, &project_name)?;
@@ -214,7 +286,7 @@ pub fn init(
             generate_minimal(dir, &project_name)?;
         }
         _ => {
-            generate_single_batch(dir, &project_name, &slug, with_sdks)?;
+            generate_single_batch(dir, &project_name, &slug, &effective_sdks)?;
         }
     }
 
@@ -231,7 +303,6 @@ pub fn init(
         }
     }
     eprintln!("  output/          Batch files");
-    eprintln!("  results/         Results");
     eprintln!("\nGet started:");
     eprintln!("  cd {}", project_name);
     eprintln!("  dw project info");
@@ -241,6 +312,9 @@ pub fn init(
 
 /// Run all workflow steps sequentially (skipping setup).
 pub fn run_all(from: usize) -> anyhow::Result<()> {
+    if from == 0 {
+        anyhow::bail!("--from is 1-indexed. Use --from 1 to start from the beginning.");
+    }
     let loaded = load_manifest()?;
     let workflow = loaded
         .manifest
@@ -310,7 +384,7 @@ setup = "echo 'No setup needed for shell projects'"
 workflow = [
     "dw project run prepare",
     "dw files stats output/batch.jsonl",
-    "dw files prepare output/batch.jsonl --model <model>",
+    "dw files prepare output/batch.jsonl --model Qwen/Qwen3-VL-30B-A3B-Instruct-FP8",
     "dw stream output/batch.jsonl > results.jsonl",
     "dw project run analyze",
     "dw usage",
@@ -336,11 +410,11 @@ set -e
 mkdir -p output
 
 cat > output/batch.jsonl << 'JSONL'
-{"custom_id":"hello-0","method":"POST","url":"/v1/chat/completions","body":{"messages":[{"role":"user","content":"What is the capital of France?"}]}}
-{"custom_id":"hello-1","method":"POST","url":"/v1/chat/completions","body":{"messages":[{"role":"user","content":"What is the capital of Japan?"}]}}
-{"custom_id":"hello-2","method":"POST","url":"/v1/chat/completions","body":{"messages":[{"role":"user","content":"What is the capital of Brazil?"}]}}
-{"custom_id":"hello-3","method":"POST","url":"/v1/chat/completions","body":{"messages":[{"role":"user","content":"What is the capital of Australia?"}]}}
-{"custom_id":"hello-4","method":"POST","url":"/v1/chat/completions","body":{"messages":[{"role":"user","content":"What is the capital of Egypt?"}]}}
+{"custom_id":"hello-0","method":"POST","url":"/v1/chat/completions","body":{"model":"Qwen/Qwen3-VL-30B-A3B-Instruct-FP8","messages":[{"role":"user","content":"What is the capital of France?"}]}}
+{"custom_id":"hello-1","method":"POST","url":"/v1/chat/completions","body":{"model":"Qwen/Qwen3-VL-30B-A3B-Instruct-FP8","messages":[{"role":"user","content":"What is the capital of Japan?"}]}}
+{"custom_id":"hello-2","method":"POST","url":"/v1/chat/completions","body":{"model":"Qwen/Qwen3-VL-30B-A3B-Instruct-FP8","messages":[{"role":"user","content":"What is the capital of Brazil?"}]}}
+{"custom_id":"hello-3","method":"POST","url":"/v1/chat/completions","body":{"model":"Qwen/Qwen3-VL-30B-A3B-Instruct-FP8","messages":[{"role":"user","content":"What is the capital of Australia?"}]}}
+{"custom_id":"hello-4","method":"POST","url":"/v1/chat/completions","body":{"model":"Qwen/Qwen3-VL-30B-A3B-Instruct-FP8","messages":[{"role":"user","content":"What is the capital of Egypt?"}]}}
 JSONL
 
 echo "Created output/batch.jsonl (5 requests)"
@@ -399,7 +473,7 @@ workflow = [
     "dw project setup",
     "dw project run prepare",
     "dw files stats output/batch.jsonl",
-    "dw files prepare output/batch.jsonl --model <model>",
+    "dw files prepare output/batch.jsonl --model Qwen/Qwen3-VL-30B-A3B-Instruct-FP8",
     "dw stream output/batch.jsonl > results.jsonl",
     "dw project run analyze -- -r results.jsonl",
     "dw usage",
@@ -428,6 +502,7 @@ fn generate_pipeline(
     slug: &str,
     with_sdks: &[String],
 ) -> anyhow::Result<()> {
+    std::fs::create_dir_all(dir.join("results"))?;
     write_file(
         &dir.join("dw.toml"),
         &format!(
@@ -438,10 +513,10 @@ workflow = [
     "dw project setup",
     "dw project run prepare-stage1",
     "dw files stats output/stage1.jsonl",
-    "dw files prepare output/stage1.jsonl --model <model>",
+    "dw files prepare output/stage1.jsonl --model Qwen/Qwen3-VL-30B-A3B-Instruct-FP8",
     "dw stream output/stage1.jsonl > results/stage1.jsonl",
     "dw project run transform -- --input results/stage1.jsonl",
-    "dw files prepare output/stage2.jsonl --model <model>",
+    "dw files prepare output/stage2.jsonl --model Qwen/Qwen3-VL-30B-A3B-Instruct-FP8",
     "dw stream output/stage2.jsonl > results/stage2.jsonl",
     "dw project run analyze -- -r results/stage2.jsonl",
     "dw usage",
@@ -487,8 +562,8 @@ fn generate_pyproject(
         &dir.join("pyproject.toml"),
         &format!(
             r#"[build-system]
-requires = ["setuptools"]
-build-backend = "setuptools.backends._legacy:_Backend"
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "{name}"
@@ -556,6 +631,7 @@ def prepare(output):
                 "method": "POST",
                 "url": "/v1/chat/completions",
                 "body": {
+                    "model": "Qwen/Qwen3-VL-30B-A3B-Instruct-FP8",
                     "messages": [{"role": "user", "content": prompt}],
                     "max_tokens": 256,
                 },
@@ -641,6 +717,7 @@ def prepare_stage1(output):
                 "method": "POST",
                 "url": "/v1/chat/completions",
                 "body": {
+                    "model": "Qwen/Qwen3-VL-30B-A3B-Instruct-FP8",
                     "messages": [
                         {"role": "user", "content": f"Write a brief summary about: {item}"}
                     ],
@@ -687,6 +764,7 @@ def transform(input_path, output):
                 "method": "POST",
                 "url": "/v1/chat/completions",
                 "body": {
+                    "model": "Qwen/Qwen3-VL-30B-A3B-Instruct-FP8",
                     "messages": [
                         {
                             "role": "user",
