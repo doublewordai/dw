@@ -35,6 +35,9 @@ struct RunState {
     started_at: String,
     last_completed_step: usize,
     total_steps: usize,
+    /// Hash of the workflow commands for change detection.
+    #[serde(default)]
+    workflow_hash: String,
     steps: Vec<StepState>,
 }
 
@@ -50,11 +53,12 @@ struct StepState {
 }
 
 impl RunState {
-    fn new(total: usize) -> Self {
+    fn new(total: usize, workflow_hash: String) -> Self {
         Self {
             started_at: chrono::Utc::now().to_rfc3339(),
             last_completed_step: 0,
             total_steps: total,
+            workflow_hash,
             steps: Vec::new(),
         }
     }
@@ -99,6 +103,17 @@ impl RunState {
             self.last_completed_step = index;
         }
     }
+}
+
+/// Compute a hash of the workflow step commands for change detection.
+fn compute_workflow_hash(steps: &[(usize, &str)]) -> String {
+    use sha2::{Digest, Sha256};
+    let mut hasher = Sha256::new();
+    for (_, cmd) in steps {
+        hasher.update(cmd.as_bytes());
+        hasher.update(b"\n");
+    }
+    format!("{:x}", hasher.finalize())
 }
 
 /// Loaded manifest with its directory (for setting cwd).
@@ -352,6 +367,19 @@ pub fn init(
         );
     }
 
+    // Validate template before any filesystem writes
+    if template.is_some()
+        && !matches!(
+            template_name.as_str(),
+            "single-batch" | "pipeline" | "shell" | "minimal"
+        )
+    {
+        anyhow::bail!(
+            "Unknown template '{}'. Options: single-batch, pipeline, shell, minimal",
+            template_name
+        );
+    }
+
     let dir = Path::new(&project_name);
     if dir.exists() {
         anyhow::bail!("Directory '{}' already exists.", project_name);
@@ -375,13 +403,8 @@ pub fn init(
         "minimal" => {
             generate_minimal(dir, &project_name)?;
         }
-        other => {
-            if template.is_some() {
-                anyhow::bail!(
-                    "Unknown template '{}'. Options: single-batch, pipeline, shell, minimal",
-                    other
-                );
-            }
+        _ => {
+            // Validated above — this is the interactive fallback
             generate_single_batch(dir, &project_name, &effective_sdks)?;
         }
     }
@@ -461,22 +484,19 @@ pub fn run_all(from: usize, continue_run: bool) -> anyhow::Result<()> {
         );
     }
 
+    let current_hash = compute_workflow_hash(&steps);
+
     // Initialize or load state
     let mut state = if continue_run {
         let mut s = RunState::load(&loaded.dir)?;
         // Check if workflow has changed since last run
-        if s.total_steps != steps.len() {
-            eprintln!(
-                "Warning: workflow has changed ({} steps now, {} in saved state). \
-                 Starting fresh run instead.",
-                steps.len(),
-                s.total_steps
-            );
-            s = RunState::new(steps.len());
+        if s.workflow_hash != current_hash {
+            eprintln!("Warning: workflow has changed since last run. Starting fresh run instead.");
+            s = RunState::new(steps.len(), current_hash.clone());
         }
         s
     } else {
-        RunState::new(steps.len())
+        RunState::new(steps.len(), current_hash)
     };
 
     let total = steps.len();

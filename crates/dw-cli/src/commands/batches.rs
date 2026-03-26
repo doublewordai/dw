@@ -272,6 +272,11 @@ pub async fn run(
     // Write batch IDs to file if requested
     if let Some(ref id_path) = args.output_id {
         use std::io::Write;
+        if let Some(parent) = id_path.parent()
+            && !parent.as_os_str().is_empty()
+        {
+            std::fs::create_dir_all(parent)?;
+        }
         let mut f = std::fs::File::create(id_path)?;
         for id in &batch_ids {
             writeln!(f, "{}", id)?;
