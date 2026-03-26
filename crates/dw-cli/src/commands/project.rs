@@ -353,16 +353,15 @@ pub fn init(
         with_sdks.to_vec()
     };
 
-    // Validate name: only alphanumeric, hyphens, underscores, dots.
-    // This is safe for: directory names, TOML values, Python package names,
-    // shell command interpolation (via uv run {name}).
+    // Validate name: alphanumeric, hyphens, underscores only.
+    // Dots are excluded because they break TOML bare keys and Python package names.
     if project_name.is_empty()
         || !project_name
             .chars()
-            .all(|c| c.is_alphanumeric() || c == '-' || c == '_' || c == '.')
+            .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
     {
         anyhow::bail!(
-            "Invalid project name '{}'. Use only letters, numbers, hyphens, underscores, and dots.",
+            "Invalid project name '{}'. Use only letters, numbers, hyphens, and underscores.",
             project_name
         );
     }
@@ -455,10 +454,33 @@ pub fn run_all(from: usize, continue_run: bool) -> anyhow::Result<()> {
         .map(|(i, s)| (i + 1, s))
         .collect();
 
+    let current_hash = compute_workflow_hash(&steps);
+
+    // Check for workflow changes before computing start point
+    let workflow_changed = if continue_run {
+        if let Ok(prev) = RunState::load(&loaded.dir) {
+            prev.workflow_hash != current_hash
+        } else {
+            false
+        }
+    } else {
+        false
+    };
+
+    if workflow_changed {
+        eprintln!("Warning: workflow has changed since last run. Starting fresh run.");
+    }
+
     // Determine start point
-    let start_from = if continue_run {
+    let start_from = if continue_run && !workflow_changed {
         let prev_state = RunState::load(&loaded.dir)?;
         let resume = prev_state.last_completed_step + 1;
+        if resume > steps.len() {
+            eprintln!(
+                "All steps already completed. Use `dw project run-all` to start a fresh run."
+            );
+            return Ok(());
+        }
         eprintln!(
             "Resuming from step {} (last completed: step {} of {})",
             resume, prev_state.last_completed_step, prev_state.total_steps
@@ -471,12 +493,6 @@ pub fn run_all(from: usize, continue_run: bool) -> anyhow::Result<()> {
     };
 
     if start_from > steps.len() {
-        if continue_run {
-            eprintln!(
-                "All steps already completed. Use `dw project run-all` to start a fresh run."
-            );
-            return Ok(());
-        }
         anyhow::bail!(
             "Step {} is out of range (workflow has {} executable steps).",
             start_from,
@@ -484,17 +500,9 @@ pub fn run_all(from: usize, continue_run: bool) -> anyhow::Result<()> {
         );
     }
 
-    let current_hash = compute_workflow_hash(&steps);
-
     // Initialize or load state
-    let mut state = if continue_run {
-        let mut s = RunState::load(&loaded.dir)?;
-        // Check if workflow has changed since last run
-        if s.workflow_hash != current_hash {
-            eprintln!("Warning: workflow has changed since last run. Starting fresh run instead.");
-            s = RunState::new(steps.len(), current_hash.clone());
-        }
-        s
+    let mut state = if continue_run && !workflow_changed {
+        RunState::load(&loaded.dir)?
     } else {
         RunState::new(steps.len(), current_hash)
     };
