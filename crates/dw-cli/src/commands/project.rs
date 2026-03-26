@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 /// Project manifest parsed from dw.toml.
 #[derive(Debug, Deserialize)]
@@ -25,6 +25,66 @@ pub struct ProjectInfo {
 pub struct StepDef {
     pub description: Option<String>,
     pub run: String,
+}
+
+const RUN_STATE_FILE: &str = ".dw-run.json";
+
+/// Persistent run state written during `run-all`.
+#[derive(Debug, Serialize, Deserialize)]
+struct RunState {
+    started_at: String,
+    completed_steps: usize,
+    total_steps: usize,
+    steps: Vec<StepState>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct StepState {
+    index: usize,
+    command: String,
+    status: String, // "completed", "failed", "skipped"
+    #[serde(skip_serializing_if = "Option::is_none")]
+    batch_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    at: Option<String>,
+}
+
+impl RunState {
+    fn new(total: usize) -> Self {
+        Self {
+            started_at: chrono::Utc::now().to_rfc3339(),
+            completed_steps: 0,
+            total_steps: total,
+            steps: Vec::new(),
+        }
+    }
+
+    fn save(&self, dir: &Path) -> anyhow::Result<()> {
+        let path = dir.join(RUN_STATE_FILE);
+        let json = serde_json::to_string_pretty(self)?;
+        std::fs::write(path, json)?;
+        Ok(())
+    }
+
+    fn load(dir: &Path) -> anyhow::Result<Self> {
+        let path = dir.join(RUN_STATE_FILE);
+        let contents = std::fs::read_to_string(&path)
+            .map_err(|_| anyhow::anyhow!("No run state found. Run `dw project run-all` first."))?;
+        Ok(serde_json::from_str(&contents)?)
+    }
+
+    fn record_step(&mut self, index: usize, command: &str, status: &str, batch_id: Option<String>) {
+        self.steps.push(StepState {
+            index,
+            command: command.to_string(),
+            status: status.to_string(),
+            batch_id,
+            at: Some(chrono::Utc::now().to_rfc3339()),
+        });
+        if status == "completed" {
+            self.completed_steps = self.completed_steps.max(index);
+        }
+    }
 }
 
 /// Loaded manifest with its directory (for setting cwd).
@@ -282,7 +342,8 @@ pub fn init(
     }
 
     // Create directories
-    std::fs::create_dir_all(dir.join("output"))?;
+    std::fs::create_dir_all(dir.join("batches"))?;
+    std::fs::create_dir_all(dir.join("results"))?;
 
     // Generate files based on template
     match template_name.as_str() {
@@ -315,7 +376,8 @@ pub fn init(
             eprintln!("  src/             Project source code");
         }
     }
-    eprintln!("  output/          Batch files");
+    eprintln!("  batches/         Batch JSONL files");
+    eprintln!("  results/         Results and analysis");
     eprintln!("\nGet started:");
     eprintln!("  cd {}", project_name);
     eprintln!("  dw project info");
@@ -323,11 +385,8 @@ pub fn init(
     Ok(())
 }
 
-/// Run all workflow steps sequentially (skipping setup).
-pub fn run_all(from: usize) -> anyhow::Result<()> {
-    if from == 0 {
-        anyhow::bail!("--from is 1-indexed. Use --from 1 to start from the beginning.");
-    }
+/// Run all workflow steps sequentially (skipping setup), with state tracking.
+pub fn run_all(from: usize, continue_run: bool) -> anyhow::Result<()> {
     let loaded = load_manifest()?;
     let workflow = loaded
         .manifest
@@ -340,29 +399,138 @@ pub fn run_all(from: usize) -> anyhow::Result<()> {
         anyhow::bail!("Workflow is empty in dw.toml.");
     }
 
-    let start = from.saturating_sub(1); // 1-indexed → 0-indexed
-    if start >= workflow.len() {
-        anyhow::bail!(
-            "Step {} is out of range (workflow has {} steps).",
-            from,
-            workflow.len()
-        );
-    }
-
-    // Filter out setup steps and count only executable steps
-    let steps: Vec<&str> = workflow
+    // Filter out setup steps
+    let steps: Vec<(usize, &str)> = workflow
         .iter()
-        .skip(start)
-        .map(|s| s.trim())
-        .filter(|s| *s != "dw project setup" && !s.starts_with("dw project setup "))
+        .enumerate()
+        .map(|(i, s)| (i + 1, s.trim()))
+        .filter(|(_, s)| *s != "dw project setup" && !s.starts_with("dw project setup "))
         .collect();
 
-    for (i, step) in steps.iter().enumerate() {
-        eprintln!("\n[{}/{}] {}", i + 1, steps.len(), step);
-        run_shell_command(step, &[], &loaded.dir)?;
+    // Determine start point
+    let start_from = if continue_run {
+        let prev_state = RunState::load(&loaded.dir)?;
+        let resume = prev_state.completed_steps + 1;
+        eprintln!(
+            "Resuming from step {} (previously completed {} of {} steps)",
+            resume, prev_state.completed_steps, prev_state.total_steps
+        );
+        resume
+    } else if from > 0 {
+        from
+    } else {
+        anyhow::bail!("--from is 1-indexed. Use --from 1 to start from the beginning.");
+    };
+
+    // Initialize or load state
+    let mut state = if continue_run {
+        RunState::load(&loaded.dir)?
+    } else {
+        RunState::new(steps.len())
+    };
+
+    let mut executed = 0;
+    let total_remaining = steps.iter().filter(|(idx, _)| *idx >= start_from).count();
+
+    for (original_idx, step) in &steps {
+        if *original_idx < start_from {
+            continue;
+        }
+
+        executed += 1;
+        eprintln!("\n[{}/{}] {}", executed, total_remaining, step);
+
+        match run_shell_command(step, &[], &loaded.dir) {
+            Ok(()) => {
+                state.record_step(*original_idx, step, "completed", None);
+                state.save(&loaded.dir)?;
+            }
+            Err(e) => {
+                state.record_step(*original_idx, step, "failed", None);
+                state.save(&loaded.dir)?;
+                eprintln!(
+                    "\nStep {} failed. Resume with: dw project run-all --continue",
+                    original_idx
+                );
+                return Err(e);
+            }
+        }
     }
 
     eprintln!("\nAll steps completed.");
+    Ok(())
+}
+
+/// Show current run status.
+pub fn status() -> anyhow::Result<()> {
+    let loaded = load_manifest()?;
+    let state = RunState::load(&loaded.dir)?;
+
+    println!("Run started: {}", state.started_at);
+    println!(
+        "Progress:    {}/{} steps completed",
+        state.completed_steps, state.total_steps
+    );
+    println!();
+
+    if state.steps.is_empty() {
+        println!("No steps recorded yet.");
+    } else {
+        for step in &state.steps {
+            let status_icon = match step.status.as_str() {
+                "completed" => "✓",
+                "failed" => "✗",
+                "skipped" => "–",
+                _ => "?",
+            };
+            let batch_info = step
+                .batch_id
+                .as_deref()
+                .map(|id| format!("  batch: {}", id))
+                .unwrap_or_default();
+            println!(
+                "  {} [{}] {}{}",
+                status_icon, step.index, step.command, batch_info
+            );
+        }
+    }
+
+    // Show resume hint if incomplete
+    if state.steps.iter().any(|s| s.status == "failed") {
+        eprintln!("\nResume with: dw project run-all --continue");
+    }
+
+    Ok(())
+}
+
+/// Clean project artifacts.
+pub fn clean() -> anyhow::Result<()> {
+    let loaded = load_manifest()?;
+    let dir = &loaded.dir;
+
+    let mut removed = Vec::new();
+
+    for subdir in &["batches", "results", "output"] {
+        let path = dir.join(subdir);
+        if path.exists() {
+            std::fs::remove_dir_all(&path)?;
+            std::fs::create_dir_all(&path)?; // recreate empty
+            removed.push(*subdir);
+        }
+    }
+
+    let state_path = dir.join(RUN_STATE_FILE);
+    if state_path.exists() {
+        std::fs::remove_file(&state_path)?;
+        removed.push(".dw-run.json");
+    }
+
+    if removed.is_empty() {
+        eprintln!("Nothing to clean.");
+    } else {
+        eprintln!("Cleaned: {}", removed.join(", "));
+    }
+
     Ok(())
 }
 
@@ -398,9 +566,9 @@ name = "{name}"
 setup = "echo 'No setup needed for shell projects'"
 workflow = [
     "dw project run prepare",
-    "dw files stats output/batch.jsonl",
-    "dw files prepare output/batch.jsonl --model Qwen/Qwen3-VL-30B-A3B-Instruct-FP8",
-    "dw stream output/batch.jsonl > results.jsonl",
+    "dw files stats batches/batch.jsonl",
+    "dw files prepare batches/batch.jsonl --model Qwen/Qwen3-VL-30B-A3B-Instruct-FP8",
+    "dw stream batches/batch.jsonl > results.jsonl",
     "dw project run analyze",
     "dw usage",
 ]
@@ -422,9 +590,9 @@ run = "bash scripts/analyze.sh"
 # Generate batch-ready JSONL. Edit this to load your data and build prompts.
 set -e
 
-mkdir -p output
+mkdir -p batches
 
-cat > output/batch.jsonl << 'JSONL'
+cat > batches/batch.jsonl << 'JSONL'
 {"custom_id":"hello-0","method":"POST","url":"/v1/chat/completions","body":{"model":"Qwen/Qwen3-VL-30B-A3B-Instruct-FP8","messages":[{"role":"user","content":"What is the capital of France?"}]}}
 {"custom_id":"hello-1","method":"POST","url":"/v1/chat/completions","body":{"model":"Qwen/Qwen3-VL-30B-A3B-Instruct-FP8","messages":[{"role":"user","content":"What is the capital of Japan?"}]}}
 {"custom_id":"hello-2","method":"POST","url":"/v1/chat/completions","body":{"model":"Qwen/Qwen3-VL-30B-A3B-Instruct-FP8","messages":[{"role":"user","content":"What is the capital of Brazil?"}]}}
@@ -432,7 +600,7 @@ cat > output/batch.jsonl << 'JSONL'
 {"custom_id":"hello-4","method":"POST","url":"/v1/chat/completions","body":{"model":"Qwen/Qwen3-VL-30B-A3B-Instruct-FP8","messages":[{"role":"user","content":"What is the capital of Egypt?"}]}}
 JSONL
 
-echo "Created output/batch.jsonl (5 requests)"
+echo "Created batches/batch.jsonl (5 requests)"
 "#,
     )?;
 
@@ -472,11 +640,7 @@ head -1 results.jsonl | python3 -m json.tool 2>/dev/null || head -1 results.json
     Ok(())
 }
 
-fn generate_single_batch(
-    dir: &Path,
-    name: &str,
-    with_sdks: &[String],
-) -> anyhow::Result<()> {
+fn generate_single_batch(dir: &Path, name: &str, with_sdks: &[String]) -> anyhow::Result<()> {
     write_file(
         &dir.join("dw.toml"),
         &format!(
@@ -486,9 +650,9 @@ setup = "uv sync"
 workflow = [
     "dw project setup",
     "dw project run prepare",
-    "dw files stats output/batch.jsonl",
-    "dw files prepare output/batch.jsonl --model Qwen/Qwen3-VL-30B-A3B-Instruct-FP8",
-    "dw stream output/batch.jsonl > results.jsonl",
+    "dw files stats batches/batch.jsonl",
+    "dw files prepare batches/batch.jsonl --model Qwen/Qwen3-VL-30B-A3B-Instruct-FP8",
+    "dw stream batches/batch.jsonl > results.jsonl",
     "dw project run analyze -- -r results.jsonl",
     "dw usage",
 ]
@@ -510,12 +674,7 @@ run = "uv run {name} analyze"
     Ok(())
 }
 
-fn generate_pipeline(
-    dir: &Path,
-    name: &str,
-    with_sdks: &[String],
-) -> anyhow::Result<()> {
-    std::fs::create_dir_all(dir.join("results"))?;
+fn generate_pipeline(dir: &Path, name: &str, with_sdks: &[String]) -> anyhow::Result<()> {
     write_file(
         &dir.join("dw.toml"),
         &format!(
@@ -525,12 +684,12 @@ setup = "uv sync"
 workflow = [
     "dw project setup",
     "dw project run prepare-stage1",
-    "dw files stats output/stage1.jsonl",
-    "dw files prepare output/stage1.jsonl --model Qwen/Qwen3-VL-30B-A3B-Instruct-FP8",
-    "dw stream output/stage1.jsonl > results/stage1.jsonl",
+    "dw files stats batches/stage1.jsonl",
+    "dw files prepare batches/stage1.jsonl --model Qwen/Qwen3-VL-30B-A3B-Instruct-FP8",
+    "dw stream batches/stage1.jsonl > results/stage1.jsonl",
     "dw project run transform -- --input results/stage1.jsonl",
-    "dw files prepare output/stage2.jsonl --model Qwen/Qwen3-VL-30B-A3B-Instruct-FP8",
-    "dw stream output/stage2.jsonl > results/stage2.jsonl",
+    "dw files prepare batches/stage2.jsonl --model Qwen/Qwen3-VL-30B-A3B-Instruct-FP8",
+    "dw stream batches/stage2.jsonl > results/stage2.jsonl",
     "dw project run analyze -- -r results/stage2.jsonl",
     "dw usage",
 ]
@@ -556,11 +715,7 @@ run = "uv run {name} analyze"
     Ok(())
 }
 
-fn generate_pyproject(
-    dir: &Path,
-    name: &str,
-    with_sdks: &[String],
-) -> anyhow::Result<()> {
+fn generate_pyproject(dir: &Path, name: &str, with_sdks: &[String]) -> anyhow::Result<()> {
     let mut deps = vec!["    \"click>=8.0\"".to_string()];
     for sdk in with_sdks {
         match sdk.as_str() {
@@ -601,7 +756,7 @@ fn generate_single_batch_cli(dir: &Path) -> anyhow::Result<()> {
 
     write_file(
         &dir.join("src/cli.py"),
-        r#""""Batch inference project. Edit prepare() and analyze() for your use case."""
+        r#"""Batch inference project. Edit prepare() and analyze() for your use case."""
 
 import json
 from pathlib import Path
@@ -616,7 +771,7 @@ def cli():
 
 
 @cli.command()
-@click.option("--output", "-o", default="output/batch.jsonl", help="Output JSONL file")
+@click.option("--output", "-o", default="batches/batch.jsonl", help="Output JSONL file")
 def prepare(output):
     """Generate batch-ready JSONL. Edit this for your data and prompts."""
     output_path = Path(output)
@@ -692,7 +847,7 @@ fn generate_pipeline_cli(dir: &Path) -> anyhow::Result<()> {
 
     write_file(
         &dir.join("src/cli.py"),
-        r#""""Multi-stage batch pipeline. Edit the stages for your use case."""
+        r#"""Multi-stage batch pipeline. Edit the stages for your use case."""
 
 import json
 from pathlib import Path
@@ -707,7 +862,7 @@ def cli():
 
 
 @cli.command("prepare-stage1")
-@click.option("--output", "-o", default="output/stage1.jsonl", help="Output JSONL file")
+@click.option("--output", "-o", default="batches/stage1.jsonl", help="Output JSONL file")
 def prepare_stage1(output):
     """Generate batch JSONL for stage 1. Edit this for your data."""
     output_path = Path(output)
@@ -743,7 +898,7 @@ def prepare_stage1(output):
 
 @cli.command()
 @click.option("--input", "-i", "input_path", required=True, help="Stage 1 results JSONL")
-@click.option("--output", "-o", default="output/stage2.jsonl", help="Output JSONL file")
+@click.option("--output", "-o", default="batches/stage2.jsonl", help="Output JSONL file")
 def transform(input_path, output):
     """Transform stage 1 results into stage 2 inputs.
 

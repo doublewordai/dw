@@ -650,7 +650,14 @@ pub enum ProjectCommands {
         /// Start from step N (1-indexed, skips earlier steps).
         #[arg(long, default_value = "1")]
         from: usize,
+        /// Continue from the last completed step of a previous run.
+        #[arg(long, short = 'c')]
+        r#continue: bool,
     },
+    /// Show current run status, completed steps, and batch IDs.
+    Status,
+    /// Clean project artifacts (batches/, results/, run state).
+    Clean,
     /// Show available project steps and workflow.
     Info,
 }
