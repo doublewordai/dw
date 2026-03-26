@@ -155,6 +155,7 @@ fn shell_escape_posix(arg: &str) -> String {
 }
 
 /// Execute a shell command in the manifest's directory, appending escaped extra args.
+/// Injects DOUBLEWORD_API_KEY from stored credentials if not already set.
 /// Uses POSIX sh. On Windows, requires WSL, Git Bash, or MSYS2.
 fn run_shell_command(cmd: &str, extra_args: &[String], cwd: &Path) -> anyhow::Result<()> {
     let full_cmd = if extra_args.is_empty() {
@@ -164,20 +165,30 @@ fn run_shell_command(cmd: &str, extra_args: &[String], cwd: &Path) -> anyhow::Re
         format!("{} {}", cmd, escaped.join(" "))
     };
 
-    let status = Command::new("sh")
-        .args(["-c", &full_cmd])
-        .current_dir(cwd)
-        .status()
-        .map_err(|e| {
-            if e.kind() == std::io::ErrorKind::NotFound {
-                anyhow::anyhow!(
-                    "'sh' not found. On Windows, install Git Bash, WSL, or MSYS2. \
+    let mut command = Command::new("sh");
+    command.args(["-c", &full_cmd]).current_dir(cwd);
+
+    // Always inject DOUBLEWORD_API_KEY from the CLI's active account.
+    // This ensures project steps use the same credentials as other dw commands,
+    // regardless of what's in the user's environment.
+    let config = crate::config::load_config();
+    let credentials = crate::config::load_credentials();
+    if let Ok((_, account)) = crate::config::resolve_account(None, &config, &credentials)
+        && let Some(ref key) = account.inference_key
+    {
+        command.env("DOUBLEWORD_API_KEY", key);
+    }
+
+    let status = command.status().map_err(|e| {
+        if e.kind() == std::io::ErrorKind::NotFound {
+            anyhow::anyhow!(
+                "'sh' not found. On Windows, install Git Bash, WSL, or MSYS2. \
                      On other systems, ensure /bin/sh is available."
-                )
-            } else {
-                anyhow::anyhow!("Failed to execute command: {}", e)
-            }
-        })?;
+            )
+        } else {
+            anyhow::anyhow!("Failed to execute command: {}", e)
+        }
+    })?;
 
     if !status.success() {
         anyhow::bail!(
