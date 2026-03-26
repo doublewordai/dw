@@ -33,7 +33,7 @@ const RUN_STATE_FILE: &str = ".dw-run.json";
 #[derive(Debug, Serialize, Deserialize)]
 struct RunState {
     started_at: String,
-    completed_steps: usize,
+    last_completed_step: usize,
     total_steps: usize,
     steps: Vec<StepState>,
 }
@@ -53,7 +53,7 @@ impl RunState {
     fn new(total: usize) -> Self {
         Self {
             started_at: chrono::Utc::now().to_rfc3339(),
-            completed_steps: 0,
+            last_completed_step: 0,
             total_steps: total,
             steps: Vec::new(),
         }
@@ -91,7 +91,7 @@ impl RunState {
             });
         }
         if status == "completed" {
-            self.completed_steps = index;
+            self.last_completed_step = index;
         }
     }
 }
@@ -430,10 +430,10 @@ pub fn run_all(from: usize, continue_run: bool) -> anyhow::Result<()> {
     // Determine start point
     let start_from = if continue_run {
         let prev_state = RunState::load(&loaded.dir)?;
-        let resume = prev_state.completed_steps + 1;
+        let resume = prev_state.last_completed_step + 1;
         eprintln!(
-            "Resuming from step {} (previously completed {} of {} steps)",
-            resume, prev_state.completed_steps, prev_state.total_steps
+            "Resuming from step {} (last completed: step {} of {})",
+            resume, prev_state.last_completed_step, prev_state.total_steps
         );
         resume
     } else if from > 0 {
@@ -441,6 +441,14 @@ pub fn run_all(from: usize, continue_run: bool) -> anyhow::Result<()> {
     } else {
         anyhow::bail!("--from is 1-indexed. Use --from 1 to start from the beginning.");
     };
+
+    if start_from > steps.len() {
+        anyhow::bail!(
+            "Step {} is out of range (workflow has {} executable steps).",
+            start_from,
+            steps.len()
+        );
+    }
 
     // Initialize or load state
     let mut state = if continue_run {
@@ -486,8 +494,8 @@ pub fn status() -> anyhow::Result<()> {
 
     println!("Run started: {}", state.started_at);
     println!(
-        "Progress:    {}/{} steps completed",
-        state.completed_steps, state.total_steps
+        "Progress:    step {}/{} last completed",
+        state.last_completed_step, state.total_steps
     );
     println!();
 
@@ -513,10 +521,9 @@ pub fn status() -> anyhow::Result<()> {
         }
     }
 
-    // Show resume hint if incomplete
-    // Show resume hint if the last recorded step failed or run is incomplete
+    // Show resume hint if the last step failed or run is incomplete
     if state.steps.last().is_some_and(|s| s.status == "failed")
-        || state.completed_steps < state.total_steps
+        || state.last_completed_step < state.total_steps
     {
         eprintln!("\nResume with: dw project run-all --continue");
     }

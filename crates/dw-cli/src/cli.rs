@@ -658,7 +658,7 @@ pub enum ProjectCommands {
         #[arg(long, short = 'c')]
         r#continue: bool,
     },
-    /// Show current run status, completed steps, and batch IDs.
+    /// Show current run status and completed steps.
     Status,
     /// Clean project artifacts (batches/, results/, run state).
     Clean,
