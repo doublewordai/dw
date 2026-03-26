@@ -72,7 +72,7 @@ pub fn setup() -> anyhow::Result<()> {
         .unwrap_or("uv sync");
 
     eprintln!("Running setup: {}", setup_cmd);
-    run_shell_command(setup_cmd, &[], &loaded.dir)
+    run_shell_command(setup_cmd, &[], &loaded.dir, false)
 }
 
 /// Run a named step from dw.toml.
@@ -95,7 +95,7 @@ pub fn run(step: &str, extra_args: &[String]) -> anyhow::Result<()> {
         eprintln!("{}", desc);
     }
 
-    run_shell_command(&step_def.run, extra_args, &loaded.dir)
+    run_shell_command(&step_def.run, extra_args, &loaded.dir, true)
 }
 
 /// Show project info and available steps.
@@ -154,10 +154,14 @@ fn shell_escape_posix(arg: &str) -> String {
     format!("'{}'", arg.replace('\'', "'\\''"))
 }
 
-/// Execute a shell command in the manifest's directory, appending escaped extra args.
-/// Injects DOUBLEWORD_API_KEY from stored credentials if not already set.
+/// Execute a shell command in the manifest's directory.
 /// Uses POSIX sh. On Windows, requires WSL, Git Bash, or MSYS2.
-fn run_shell_command(cmd: &str, extra_args: &[String], cwd: &Path) -> anyhow::Result<()> {
+fn run_shell_command(
+    cmd: &str,
+    extra_args: &[String],
+    cwd: &Path,
+    inject_credentials: bool,
+) -> anyhow::Result<()> {
     let full_cmd = if extra_args.is_empty() {
         cmd.to_string()
     } else {
@@ -168,15 +172,17 @@ fn run_shell_command(cmd: &str, extra_args: &[String], cwd: &Path) -> anyhow::Re
     let mut command = Command::new("sh");
     command.args(["-c", &full_cmd]).current_dir(cwd);
 
-    // Always inject DOUBLEWORD_API_KEY from the CLI's active account.
-    // This ensures project steps use the same credentials as other dw commands,
-    // regardless of what's in the user's environment.
-    let config = crate::config::load_config();
-    let credentials = crate::config::load_credentials();
-    if let Ok((_, account)) = crate::config::resolve_account(None, &config, &credentials)
-        && let Some(ref key) = account.inference_key
-    {
-        command.env("DOUBLEWORD_API_KEY", key);
+    // Inject DOUBLEWORD_API_KEY for project steps that may need API access.
+    // Always uses the CLI's active account — overrides any stale env var to
+    // prevent accidental billing to the wrong account.
+    if inject_credentials {
+        let config = crate::config::load_config();
+        let credentials = crate::config::load_credentials();
+        if let Ok((_, account)) = crate::config::resolve_account(None, &config, &credentials)
+            && let Some(ref key) = account.inference_key
+        {
+            command.env("DOUBLEWORD_API_KEY", key);
+        }
     }
 
     let status = command.status().map_err(|e| {
