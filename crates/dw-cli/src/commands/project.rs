@@ -65,11 +65,22 @@ impl RunState {
         let path = dir.join(RUN_STATE_FILE);
         let tmp = dir.join(".dw-run.json.tmp");
         let json = serde_json::to_string_pretty(self)?;
-        // Atomic write: write to temp file then rename, so readers never see partial content.
-        // Remove destination first for Windows compatibility (rename fails if target exists).
+        // Safe atomic write: temp → rename over destination.
+        // On failure, the previous state is preserved via backup.
         std::fs::write(&tmp, json)?;
-        let _ = std::fs::remove_file(&path); // ignore error if doesn't exist
-        std::fs::rename(&tmp, &path)?;
+        let backup = dir.join(".dw-run.json.bak");
+        let had_existing = path.exists();
+        if had_existing {
+            std::fs::rename(&path, &backup)?;
+        }
+        if let Err(e) = std::fs::rename(&tmp, &path) {
+            // Restore backup on failure
+            if had_existing {
+                let _ = std::fs::rename(&backup, &path);
+            }
+            return Err(e.into());
+        }
+        let _ = std::fs::remove_file(&backup);
         Ok(())
     }
 
