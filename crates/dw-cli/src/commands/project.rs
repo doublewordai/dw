@@ -65,21 +65,31 @@ impl RunState {
 
     fn save(&self, dir: &Path) -> anyhow::Result<()> {
         let path = dir.join(RUN_STATE_FILE);
+        let tmp = dir.join(".dw-run.json.tmp");
         let json = serde_json::to_string_pretty(self)?;
-        std::fs::write(path, json)?;
+        // Atomic write: write to temp file then rename, so readers never see partial content
+        std::fs::write(&tmp, json)?;
+        std::fs::rename(&tmp, &path)?;
         Ok(())
     }
 
     fn load(dir: &Path) -> anyhow::Result<Self> {
         let path = dir.join(RUN_STATE_FILE);
-        let contents = std::fs::read_to_string(&path).map_err(|e| {
-            if e.kind() == std::io::ErrorKind::NotFound {
+        let contents = std::fs::read_to_string(&path).map_err(|e| match e.kind() {
+            std::io::ErrorKind::NotFound => {
                 anyhow::anyhow!("No run state found. Run `dw project run-all` first.")
-            } else {
+            }
+            _ => {
                 anyhow::anyhow!("Could not read {}: {}", path.display(), e)
             }
         })?;
-        Ok(serde_json::from_str(&contents)?)
+        serde_json::from_str(&contents).map_err(|e| {
+            anyhow::anyhow!(
+                "Run state file is corrupt ({}). A run may be in progress. \
+                 Use `dw project clean` to reset.",
+                e
+            )
+        })
     }
 
     fn record_step(&mut self, index: usize, command: &str, status: &str, batch_id: Option<String>) {
@@ -611,10 +621,18 @@ pub fn clean() -> anyhow::Result<()> {
         }
     }
 
-    let state_path = dir.join(RUN_STATE_FILE);
-    if state_path.exists() {
-        std::fs::remove_file(&state_path)?;
-        removed.push(".dw-run.json");
+    // Clean run state and workflow artifacts from project root
+    for file in &[
+        RUN_STATE_FILE,
+        ".dw-run.json.tmp",
+        ".batch-id",
+        "results.jsonl",
+    ] {
+        let path = dir.join(file);
+        if path.exists() {
+            std::fs::remove_file(&path)?;
+            removed.push(file);
+        }
     }
 
     if removed.is_empty() {
