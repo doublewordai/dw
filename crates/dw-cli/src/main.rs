@@ -77,8 +77,18 @@ async fn run() -> anyhow::Result<()> {
         }
         Commands::Update => commands::update::run().await,
         Commands::Project(subcmd) => match subcmd {
+            ProjectCommands::Init {
+                name,
+                template,
+                with_sdks,
+            } => commands::project::init(name.as_deref(), template.as_deref(), &with_sdks),
             ProjectCommands::Setup => commands::project::setup(),
             ProjectCommands::Run { step, args } => commands::project::run(&step, &args),
+            ProjectCommands::RunAll { from, r#continue } => {
+                commands::project::run_all(from, r#continue)
+            }
+            ProjectCommands::Status => commands::project::status(),
+            ProjectCommands::Clean => commands::project::clean(),
             ProjectCommands::Info => commands::project::info(),
         },
         Commands::Examples(subcmd) => match subcmd {

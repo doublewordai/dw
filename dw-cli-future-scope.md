@@ -87,6 +87,14 @@ Items consciously deferred from v1. Revisit after initial release and internal t
 - Webhook logs: `dw webhooks logs <id>` — recent delivery attempts and responses
 - Retry configuration per webhook
 
+## Multi-Run Project State
+- Named/numbered runs (`runs/run-001/`, `runs/run-002/`) instead of single overwriting state
+- `dw project run-all --name experiment-a` to label runs
+- `dw project status --run run-001` to inspect specific runs
+- `dw project diff run-001 run-002` to compare results across runs
+- Run history and statistics
+- Symlink `runs/latest` to most recent run
+
 ## Multi-File Batch Orchestration
 - Dependency graphs between batches (batch B waits for batch A)
 - Sequential pipeline execution from a manifest file
