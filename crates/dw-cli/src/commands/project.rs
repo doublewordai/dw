@@ -74,15 +74,24 @@ impl RunState {
     }
 
     fn record_step(&mut self, index: usize, command: &str, status: &str, batch_id: Option<String>) {
-        self.steps.push(StepState {
-            index,
-            command: command.to_string(),
-            status: status.to_string(),
-            batch_id,
-            at: Some(chrono::Utc::now().to_rfc3339()),
-        });
+        // Update existing entry for this index, or append new
+        if let Some(existing) = self.steps.iter_mut().find(|s| s.index == index) {
+            existing.status = status.to_string();
+            existing.at = Some(chrono::Utc::now().to_rfc3339());
+            if batch_id.is_some() {
+                existing.batch_id = batch_id;
+            }
+        } else {
+            self.steps.push(StepState {
+                index,
+                command: command.to_string(),
+                status: status.to_string(),
+                batch_id,
+                at: Some(chrono::Utc::now().to_rfc3339()),
+            });
+        }
         if status == "completed" {
-            self.completed_steps = self.completed_steps.max(index);
+            self.completed_steps = index;
         }
     }
 }
@@ -407,14 +416,15 @@ pub fn run_all(from: usize, continue_run: bool) -> anyhow::Result<()> {
         anyhow::bail!("Workflow is empty in dw.toml.");
     }
 
-    // Filter out setup steps
+    // Filter out setup steps and reindex contiguously (1-based)
     let steps: Vec<(usize, &str)> = workflow
         .iter()
-        .enumerate()
-        .map(|(i, s)| (i + 1, s.trim()))
-        .filter(|(_, s)| {
+        .map(|s| s.trim())
+        .filter(|s| {
             !s.is_empty() && *s != "dw project setup" && !s.starts_with("dw project setup ")
         })
+        .enumerate()
+        .map(|(i, s)| (i + 1, s))
         .collect();
 
     // Determine start point
@@ -439,28 +449,26 @@ pub fn run_all(from: usize, continue_run: bool) -> anyhow::Result<()> {
         RunState::new(steps.len())
     };
 
-    let mut executed = 0;
-    let total_remaining = steps.iter().filter(|(idx, _)| *idx >= start_from).count();
+    let total = steps.len();
 
-    for (original_idx, step) in &steps {
-        if *original_idx < start_from {
+    for (step_num, step) in &steps {
+        if *step_num < start_from {
             continue;
         }
 
-        executed += 1;
-        eprintln!("\n[{}/{}] {}", executed, total_remaining, step);
+        eprintln!("\n[{}/{}] {}", step_num, total, step);
 
         match run_shell_command(step, &[], &loaded.dir) {
             Ok(()) => {
-                state.record_step(*original_idx, step, "completed", None);
+                state.record_step(*step_num, step, "completed", None);
                 state.save(&loaded.dir)?;
             }
             Err(e) => {
-                state.record_step(*original_idx, step, "failed", None);
+                state.record_step(*step_num, step, "failed", None);
                 state.save(&loaded.dir)?;
                 eprintln!(
                     "\nStep {} failed. Resume with: dw project run-all --continue",
-                    original_idx
+                    step_num
                 );
                 return Err(e);
             }
@@ -506,7 +514,10 @@ pub fn status() -> anyhow::Result<()> {
     }
 
     // Show resume hint if incomplete
-    if state.steps.iter().any(|s| s.status == "failed") {
+    // Show resume hint if the last recorded step failed or run is incomplete
+    if state.steps.last().is_some_and(|s| s.status == "failed")
+        || state.completed_steps < state.total_steps
+    {
         eprintln!("\nResume with: dw project run-all --continue");
     }
 

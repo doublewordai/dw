@@ -98,7 +98,7 @@ Items consciously deferred from v1. Revisit after initial release and internal t
 ## Multi-File Batch Orchestration
 - Dependency graphs between batches (batch B waits for batch A)
 - Sequential pipeline execution from a manifest file
-- `dw pipeline run pipeline.yaml` ��� declarative multi-stage execution
+- `dw pipeline run pipeline.yaml` — declarative multi-stage execution
 - DAG visualization in TUI
 
 ## CLI Configuration Management
