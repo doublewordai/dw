@@ -68,8 +68,13 @@ impl RunState {
 
     fn load(dir: &Path) -> anyhow::Result<Self> {
         let path = dir.join(RUN_STATE_FILE);
-        let contents = std::fs::read_to_string(&path)
-            .map_err(|_| anyhow::anyhow!("No run state found. Run `dw project run-all` first."))?;
+        let contents = std::fs::read_to_string(&path).map_err(|e| {
+            if e.kind() == std::io::ErrorKind::NotFound {
+                anyhow::anyhow!("No run state found. Run `dw project run-all` first.")
+            } else {
+                anyhow::anyhow!("Could not read {}: {}", path.display(), e)
+            }
+        })?;
         Ok(serde_json::from_str(&contents)?)
     }
 
@@ -443,6 +448,10 @@ pub fn run_all(from: usize, continue_run: bool) -> anyhow::Result<()> {
     };
 
     if start_from > steps.len() {
+        if continue_run {
+            eprintln!("All steps already completed. Use `dw project run-all` to start a fresh run.");
+            return Ok(());
+        }
         anyhow::bail!(
             "Step {} is out of range (workflow has {} executable steps).",
             start_from,
