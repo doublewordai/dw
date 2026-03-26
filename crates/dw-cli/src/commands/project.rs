@@ -142,12 +142,18 @@ pub fn info() -> anyhow::Result<()> {
             })
             .unwrap_or_default();
 
+        // Precompute position map for O(1) lookup during sort
+        let pos_map: std::collections::HashMap<&str, usize> = workflow_order
+            .iter()
+            .enumerate()
+            .map(|(i, name)| (*name, i))
+            .collect();
+
         let mut ordered_steps: Vec<(&String, &StepDef)> = loaded.manifest.steps.iter().collect();
-        ordered_steps.sort_by_key(|(name, _)| {
-            workflow_order
-                .iter()
-                .position(|w| *w == name.as_str())
-                .unwrap_or(usize::MAX)
+        ordered_steps.sort_by(|(a, _), (b, _)| {
+            let pos_a = pos_map.get(a.as_str()).copied().unwrap_or(usize::MAX);
+            let pos_b = pos_map.get(b.as_str()).copied().unwrap_or(usize::MAX);
+            pos_a.cmp(&pos_b).then_with(|| a.cmp(b))
         });
 
         println!("Steps:");
@@ -179,11 +185,17 @@ pub fn init(
     template: Option<&str>,
     with_sdks: &[String],
 ) -> anyhow::Result<()> {
-    use std::io::Write;
+    use std::io::{IsTerminal, Write};
+
+    let interactive = std::io::stdin().is_terminal();
 
     // Interactive name prompt if not provided
     let project_name = if let Some(n) = name {
         n.to_string()
+    } else if !interactive {
+        anyhow::bail!(
+            "Project name is required in non-interactive mode. Usage: dw project init <name>"
+        );
     } else {
         eprint!("Project name: ");
         std::io::stderr().flush()?;
@@ -199,6 +211,8 @@ pub fn init(
     // Interactive template selection if not provided
     let template_name = if let Some(t) = template {
         t.to_string()
+    } else if !interactive {
+        "single-batch".to_string()
     } else {
         eprintln!("\nTemplate:");
         eprintln!("  1. single-batch  — prepare → submit → analyze (default)");
@@ -222,8 +236,9 @@ pub fn init(
     };
 
     // Interactive SDK selection if no --with flags and using Python templates
+    // Prompt for SDKs interactively if none specified via --with and using a Python template
     let effective_sdks: Vec<String> = if with_sdks.is_empty()
-        && template.is_none()
+        && interactive
         && matches!(template_name.as_str(), "single-batch" | "pipeline")
     {
         eprintln!("\nOptional SDKs (enter numbers, comma-separated, or press Enter to skip):");
@@ -247,15 +262,16 @@ pub fn init(
         with_sdks.to_vec()
     };
 
-    // Validate name: no path separators, control chars, or characters that break TOML/Python
-    if project_name.contains('/')
-        || project_name.contains('\\')
-        || project_name.contains('"')
-        || project_name.contains('\'')
-        || project_name.chars().any(|c| c.is_control())
+    // Validate name: only alphanumeric, hyphens, underscores, dots.
+    // This is safe for: directory names, TOML values, Python package names,
+    // shell command interpolation (via uv run {name}).
+    if project_name.is_empty()
+        || !project_name
+            .chars()
+            .all(|c| c.is_alphanumeric() || c == '-' || c == '_' || c == '.')
     {
         anyhow::bail!(
-            "Invalid project name '{}'. Avoid path separators, quotes, and control characters.",
+            "Invalid project name '{}'. Use only letters, numbers, hyphens, underscores, and dots.",
             project_name
         );
     }
@@ -268,16 +284,13 @@ pub fn init(
     // Create directories
     std::fs::create_dir_all(dir.join("output"))?;
 
-    // Slug for Python package name (no hyphens/spaces)
-    let slug = project_name.replace(['-', ' '], "_");
-
     // Generate files based on template
     match template_name.as_str() {
         "single-batch" => {
-            generate_single_batch(dir, &project_name, &slug, &effective_sdks)?;
+            generate_single_batch(dir, &project_name, &effective_sdks)?;
         }
         "pipeline" => {
-            generate_pipeline(dir, &project_name, &slug, &effective_sdks)?;
+            generate_pipeline(dir, &project_name, &effective_sdks)?;
         }
         "shell" => {
             generate_shell(dir, &project_name)?;
@@ -286,7 +299,7 @@ pub fn init(
             generate_minimal(dir, &project_name)?;
         }
         _ => {
-            generate_single_batch(dir, &project_name, &slug, &effective_sdks)?;
+            generate_single_batch(dir, &project_name, &effective_sdks)?;
         }
     }
 
@@ -336,15 +349,17 @@ pub fn run_all(from: usize) -> anyhow::Result<()> {
         );
     }
 
-    for (i, step) in workflow.iter().enumerate().skip(start) {
-        // Skip setup steps in run-all
-        let trimmed = step.trim();
-        if trimmed == "dw project setup" || trimmed.starts_with("dw project setup ") {
-            continue;
-        }
+    // Filter out setup steps and count only executable steps
+    let steps: Vec<&str> = workflow
+        .iter()
+        .skip(start)
+        .map(|s| s.trim())
+        .filter(|s| *s != "dw project setup" && !s.starts_with("dw project setup "))
+        .collect();
 
-        eprintln!("\n[{}/{}] {}", i + 1, workflow.len(), step);
-        run_shell_command(trimmed, &[], &loaded.dir)?;
+    for (i, step) in steps.iter().enumerate() {
+        eprintln!("\n[{}/{}] {}", i + 1, steps.len(), step);
+        run_shell_command(step, &[], &loaded.dir)?;
     }
 
     eprintln!("\nAll steps completed.");
@@ -460,7 +475,6 @@ head -1 results.jsonl | python3 -m json.tool 2>/dev/null || head -1 results.json
 fn generate_single_batch(
     dir: &Path,
     name: &str,
-    slug: &str,
     with_sdks: &[String],
 ) -> anyhow::Result<()> {
     write_file(
@@ -490,8 +504,8 @@ run = "uv run {name} analyze"
         ),
     )?;
 
-    generate_pyproject(dir, name, slug, with_sdks)?;
-    generate_single_batch_cli(dir, slug)?;
+    generate_pyproject(dir, name, with_sdks)?;
+    generate_single_batch_cli(dir)?;
 
     Ok(())
 }
@@ -499,7 +513,6 @@ run = "uv run {name} analyze"
 fn generate_pipeline(
     dir: &Path,
     name: &str,
-    slug: &str,
     with_sdks: &[String],
 ) -> anyhow::Result<()> {
     std::fs::create_dir_all(dir.join("results"))?;
@@ -537,8 +550,8 @@ run = "uv run {name} analyze"
         ),
     )?;
 
-    generate_pyproject(dir, name, slug, with_sdks)?;
-    generate_pipeline_cli(dir, slug)?;
+    generate_pyproject(dir, name, with_sdks)?;
+    generate_pipeline_cli(dir)?;
 
     Ok(())
 }
@@ -546,7 +559,6 @@ run = "uv run {name} analyze"
 fn generate_pyproject(
     dir: &Path,
     name: &str,
-    _slug: &str,
     with_sdks: &[String],
 ) -> anyhow::Result<()> {
     let mut deps = vec!["    \"click>=8.0\"".to_string()];
@@ -584,7 +596,7 @@ where = ["."]
     )
 }
 
-fn generate_single_batch_cli(dir: &Path, _slug: &str) -> anyhow::Result<()> {
+fn generate_single_batch_cli(dir: &Path) -> anyhow::Result<()> {
     write_file(&dir.join("src/__init__.py"), "")?;
 
     write_file(
@@ -675,7 +687,7 @@ def main():
     )
 }
 
-fn generate_pipeline_cli(dir: &Path, _slug: &str) -> anyhow::Result<()> {
+fn generate_pipeline_cli(dir: &Path) -> anyhow::Result<()> {
     write_file(&dir.join("src/__init__.py"), "")?;
 
     write_file(
