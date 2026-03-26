@@ -71,6 +71,7 @@ impl RunState {
         let backup = dir.join(".dw-run.json.bak");
         let had_existing = path.exists();
         if had_existing {
+            let _ = std::fs::remove_file(&backup); // remove stale backup first
             std::fs::rename(&path, &backup)?;
         }
         if let Err(e) = std::fs::rename(&tmp, &path) {
