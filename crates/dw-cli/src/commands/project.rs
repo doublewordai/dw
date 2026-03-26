@@ -65,8 +65,10 @@ impl RunState {
         let path = dir.join(RUN_STATE_FILE);
         let tmp = dir.join(".dw-run.json.tmp");
         let json = serde_json::to_string_pretty(self)?;
-        // Atomic write: write to temp file then rename, so readers never see partial content
+        // Atomic write: write to temp file then rename, so readers never see partial content.
+        // Remove destination first for Windows compatibility (rename fails if target exists).
         std::fs::write(&tmp, json)?;
+        let _ = std::fs::remove_file(&path); // ignore error if doesn't exist
         std::fs::rename(&tmp, &path)?;
         Ok(())
     }
@@ -266,6 +268,7 @@ pub fn info() -> anyhow::Result<()> {
         for (i, step) in workflow.iter().enumerate() {
             println!("  {}. {}", i + 1, step);
         }
+        eprintln!("Note: `dw project run-all` skips setup. Step numbers in --from exclude setup.");
         println!();
     }
 
