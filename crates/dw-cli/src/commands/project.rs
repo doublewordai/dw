@@ -154,8 +154,14 @@ fn shell_escape_posix(arg: &str) -> String {
     format!("'{}'", arg.replace('\'', "'\\''"))
 }
 
-/// Execute a shell command in the manifest's directory, appending escaped extra args.
-/// Uses POSIX sh. On Windows, requires WSL, Git Bash, or MSYS2.
+/// Execute a shell command in the manifest's directory.
+/// Uses POSIX `sh`. On Windows, this requires that a `sh` binary is available
+/// on PATH (for example from Git Bash or MSYS2), or that the CLI is run inside
+/// a Linux/WSL environment where `sh` is present.
+///
+/// This helper does not inject credentials; it simply inherits the environment
+/// of the parent process. Project steps that need API access should prefer
+/// `dw` subcommands (which read credentials from `~/.dw/` automatically).
 fn run_shell_command(cmd: &str, extra_args: &[String], cwd: &Path) -> anyhow::Result<()> {
     let full_cmd = if extra_args.is_empty() {
         cmd.to_string()
