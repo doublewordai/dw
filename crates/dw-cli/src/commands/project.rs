@@ -561,11 +561,18 @@ pub fn status() -> anyhow::Result<()> {
     let state = RunState::load(&loaded.dir)?;
 
     println!("Run started: {}", state.started_at);
-    println!(
-        "Progress:    will resume from step {}/{}",
-        (state.last_completed_step + 1).min(state.total_steps + 1),
-        state.total_steps
-    );
+    if state.last_completed_step >= state.total_steps {
+        println!(
+            "Progress:    all {}/{} steps completed",
+            state.total_steps, state.total_steps
+        );
+    } else {
+        println!(
+            "Progress:    step {}/{} next",
+            state.last_completed_step + 1,
+            state.total_steps
+        );
+    }
     println!();
 
     if state.steps.is_empty() {
