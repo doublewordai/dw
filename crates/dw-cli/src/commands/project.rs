@@ -72,7 +72,7 @@ pub fn setup() -> anyhow::Result<()> {
         .unwrap_or("uv sync");
 
     eprintln!("Running setup: {}", setup_cmd);
-    run_shell_command(setup_cmd, &[], &loaded.dir, false)
+    run_shell_command(setup_cmd, &[], &loaded.dir)
 }
 
 /// Run a named step from dw.toml.
@@ -95,7 +95,7 @@ pub fn run(step: &str, extra_args: &[String]) -> anyhow::Result<()> {
         eprintln!("{}", desc);
     }
 
-    run_shell_command(&step_def.run, extra_args, &loaded.dir, true)
+    run_shell_command(&step_def.run, extra_args, &loaded.dir)
 }
 
 /// Show project info and available steps.
@@ -156,12 +156,10 @@ fn shell_escape_posix(arg: &str) -> String {
 
 /// Execute a shell command in the manifest's directory.
 /// Uses POSIX sh. On Windows, requires WSL, Git Bash, or MSYS2.
-fn run_shell_command(
-    cmd: &str,
-    extra_args: &[String],
-    cwd: &Path,
-    inject_credentials: bool,
-) -> anyhow::Result<()> {
+///
+/// No credentials are injected — project steps that need API access should
+/// use `dw` commands (which read credentials from ~/.dw/ automatically).
+fn run_shell_command(cmd: &str, extra_args: &[String], cwd: &Path) -> anyhow::Result<()> {
     let full_cmd = if extra_args.is_empty() {
         cmd.to_string()
     } else {
@@ -169,32 +167,20 @@ fn run_shell_command(
         format!("{} {}", cmd, escaped.join(" "))
     };
 
-    let mut command = Command::new("sh");
-    command.args(["-c", &full_cmd]).current_dir(cwd);
-
-    // Inject DOUBLEWORD_API_KEY for project steps that may need API access.
-    // Always uses the CLI's active account — overrides any stale env var to
-    // prevent accidental billing to the wrong account.
-    if inject_credentials {
-        let config = crate::config::load_config();
-        let credentials = crate::config::load_credentials();
-        if let Ok((_, account)) = crate::config::resolve_account(None, &config, &credentials)
-            && let Some(ref key) = account.inference_key
-        {
-            command.env("DOUBLEWORD_API_KEY", key);
-        }
-    }
-
-    let status = command.status().map_err(|e| {
-        if e.kind() == std::io::ErrorKind::NotFound {
-            anyhow::anyhow!(
-                "'sh' not found. On Windows, install Git Bash, WSL, or MSYS2. \
+    let status = Command::new("sh")
+        .args(["-c", &full_cmd])
+        .current_dir(cwd)
+        .status()
+        .map_err(|e| {
+            if e.kind() == std::io::ErrorKind::NotFound {
+                anyhow::anyhow!(
+                    "'sh' not found. On Windows, install Git Bash, WSL, or MSYS2. \
                      On other systems, ensure /bin/sh is available."
-            )
-        } else {
-            anyhow::anyhow!("Failed to execute command: {}", e)
-        }
-    })?;
+                )
+            } else {
+                anyhow::anyhow!("Failed to execute command: {}", e)
+            }
+        })?;
 
     if !status.success() {
         anyhow::bail!(
