@@ -449,7 +449,9 @@ pub fn run_all(from: usize, continue_run: bool) -> anyhow::Result<()> {
 
     if start_from > steps.len() {
         if continue_run {
-            eprintln!("All steps already completed. Use `dw project run-all` to start a fresh run.");
+            eprintln!(
+                "All steps already completed. Use `dw project run-all` to start a fresh run."
+            );
             return Ok(());
         }
         anyhow::bail!(
@@ -461,12 +463,37 @@ pub fn run_all(from: usize, continue_run: bool) -> anyhow::Result<()> {
 
     // Initialize or load state
     let mut state = if continue_run {
-        RunState::load(&loaded.dir)?
+        let mut s = RunState::load(&loaded.dir)?;
+        // Check if workflow has changed since last run
+        if s.total_steps != steps.len() {
+            eprintln!(
+                "Warning: workflow has changed ({} steps now, {} in saved state). \
+                 Starting fresh run instead.",
+                steps.len(),
+                s.total_steps
+            );
+            s = RunState::new(steps.len());
+        }
+        s
     } else {
         RunState::new(steps.len())
     };
 
     let total = steps.len();
+
+    // Record skipped steps so --continue resumes correctly
+    if !continue_run {
+        for (step_num, step) in &steps {
+            if *step_num >= start_from {
+                break;
+            }
+            state.record_step(*step_num, step, "skipped", None);
+        }
+        if start_from > 1 {
+            state.last_completed_step = start_from - 1;
+            state.save(&loaded.dir)?;
+        }
+    }
 
     for (step_num, step) in &steps {
         if *step_num < start_from {
