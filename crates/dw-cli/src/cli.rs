@@ -649,7 +649,7 @@ pub enum ProjectCommands {
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         args: Vec<String>,
     },
-    /// Run all workflow steps sequentially.
+    /// Run all workflow steps sequentially (skips `dw project setup`).
     RunAll {
         /// Start from step N (1-indexed, skips earlier steps).
         #[arg(long, default_value = "1")]

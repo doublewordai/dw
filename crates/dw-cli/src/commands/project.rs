@@ -47,8 +47,6 @@ struct StepState {
     command: String,
     status: String, // "completed", "failed", "skipped"
     #[serde(skip_serializing_if = "Option::is_none")]
-    batch_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     at: Option<String>,
 }
 
@@ -92,20 +90,16 @@ impl RunState {
         })
     }
 
-    fn record_step(&mut self, index: usize, command: &str, status: &str, batch_id: Option<String>) {
+    fn record_step(&mut self, index: usize, command: &str, status: &str) {
         // Update existing entry for this index, or append new
         if let Some(existing) = self.steps.iter_mut().find(|s| s.index == index) {
             existing.status = status.to_string();
             existing.at = Some(chrono::Utc::now().to_rfc3339());
-            if batch_id.is_some() {
-                existing.batch_id = batch_id;
-            }
         } else {
             self.steps.push(StepState {
                 index,
                 command: command.to_string(),
                 status: status.to_string(),
-                batch_id,
                 at: Some(chrono::Utc::now().to_rfc3339()),
             });
         }
@@ -525,7 +519,7 @@ pub fn run_all(from: usize, continue_run: bool) -> anyhow::Result<()> {
             if *step_num >= start_from {
                 break;
             }
-            state.record_step(*step_num, step, "skipped", None);
+            state.record_step(*step_num, step, "skipped");
         }
         if start_from > 1 {
             state.last_completed_step = start_from - 1;
@@ -542,11 +536,11 @@ pub fn run_all(from: usize, continue_run: bool) -> anyhow::Result<()> {
 
         match run_shell_command(step, &[], &loaded.dir) {
             Ok(()) => {
-                state.record_step(*step_num, step, "completed", None);
+                state.record_step(*step_num, step, "completed");
                 state.save(&loaded.dir)?;
             }
             Err(e) => {
-                state.record_step(*step_num, step, "failed", None);
+                state.record_step(*step_num, step, "failed");
                 state.save(&loaded.dir)?;
                 eprintln!(
                     "\nStep {} failed. Resume with: dw project run-all --continue",
@@ -568,8 +562,9 @@ pub fn status() -> anyhow::Result<()> {
 
     println!("Run started: {}", state.started_at);
     println!(
-        "Progress:    step {}/{} last completed",
-        state.last_completed_step, state.total_steps
+        "Progress:    will resume from step {}/{}",
+        (state.last_completed_step + 1).min(state.total_steps + 1),
+        state.total_steps
     );
     println!();
 
@@ -583,15 +578,7 @@ pub fn status() -> anyhow::Result<()> {
                 "skipped" => "–",
                 _ => "?",
             };
-            let batch_info = step
-                .batch_id
-                .as_deref()
-                .map(|id| format!("  batch: {}", id))
-                .unwrap_or_default();
-            println!(
-                "  {} [{}] {}{}",
-                status_icon, step.index, step.command, batch_info
-            );
+            println!("  {} [{}] {}", status_icon, step.index, step.command);
         }
     }
 
