@@ -788,7 +788,7 @@ fn generate_single_batch_cli(dir: &Path) -> anyhow::Result<()> {
 
     write_file(
         &dir.join("src/cli.py"),
-        r#"""Batch inference project. Edit prepare() and analyze() for your use case."""
+        r#""""Batch inference project. Edit prepare() and analyze() for your use case."""
 
 import json
 from pathlib import Path
@@ -879,7 +879,7 @@ fn generate_pipeline_cli(dir: &Path) -> anyhow::Result<()> {
 
     write_file(
         &dir.join("src/cli.py"),
-        r#"""Multi-stage batch pipeline. Edit the stages for your use case."""
+        r#""""Multi-stage batch pipeline. Edit the stages for your use case."""
 
 import json
 from pathlib import Path
