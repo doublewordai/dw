@@ -28,8 +28,8 @@ pub async fn run(
     if paths.len() == 1 {
         // Single file: simple sequential flow
         let batch_id = upload_and_create(client, &paths[0], args, None).await?;
-        stream_single(client, &batch_id, poll_interval_secs, max_retries).await?;
         eprintln!("Batch: {}", batch_id);
+        stream_single(client, &batch_id, poll_interval_secs, max_retries).await?;
         return Ok(());
     }
 
