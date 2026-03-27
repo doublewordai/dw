@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.9](https://github.com/doublewordai/dw/compare/v0.1.8...v0.1.9) (2026-03-26)
+
+
+### Features
+
+* dw project init scaffolds ([#29](https://github.com/doublewordai/dw/issues/29)) ([4f12956](https://github.com/doublewordai/dw/commit/4f129569a37ba31a4ba1301416ce76c70b45373b))
+
+
+### Bug Fixes
+
+* get full instruction flow after dw project setup ([#27](https://github.com/doublewordai/dw/issues/27)) ([9abf345](https://github.com/doublewordai/dw/commit/9abf3457a7bc8ce626279883f7917b730c2efbdc))
+
 ## [0.1.8](https://github.com/doublewordai/dw/compare/v0.1.7...v0.1.8) (2026-03-25)
 
 
