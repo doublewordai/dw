@@ -1,5 +1,9 @@
 # dw — Doubleword Batch Inference CLI
 
+[![GitHub](https://img.shields.io/badge/GitHub-doublewordai%2Fdw-blue)](https://github.com/doublewordai/dw)
+
+> **[Full documentation](https://doublewordai.github.io/dw/)**
+
 A command-line tool for the [Doubleword](https://doubleword.ai) batch inference platform. Upload JSONL files, run batches, stream results, and send real-time inference requests — all from the terminal.
 
 Replaces curl commands and custom scripts with a single tool for managing files, running batches, and sending inference requests. Built for developers who interact with the API directly, scripts that automate batch workflows, and AI agents building data pipelines.
@@ -466,3 +470,16 @@ just lint      # Clippy + fmt check
 just ci        # lint + test
 just run -- models list   # Run with args
 ```
+
+## Documentation
+
+Full documentation is available at **[doublewordai.github.io/dw](https://doublewordai.github.io/dw/)**.
+
+- [Installation](https://doublewordai.github.io/dw/installation.html)
+- [Quickstart](https://doublewordai.github.io/dw/quickstart.html)
+- [Batch Processing](https://doublewordai.github.io/dw/batches.html)
+- [JSONL Format](https://doublewordai.github.io/dw/jsonl-format.html)
+- [Local File Tools](https://doublewordai.github.io/dw/file-tools.html)
+- [Project System](https://doublewordai.github.io/dw/projects.html)
+- [Examples](https://doublewordai.github.io/dw/examples.html)
+- [Command Reference](https://doublewordai.github.io/dw/commands.html)

@@ -1,0 +1,10 @@
+[book]
+title = "dw"
+description = "Documentation for the Doubleword Batch Inference CLI"
+authors = ["Doubleword"]
+language = "en"
+src = "src"
+
+[output.html]
+git-repository-url = "https://github.com/doublewordai/dw"
+edit-url-template = "https://github.com/doublewordai/dw/edit/main/docs/src/{path}"
