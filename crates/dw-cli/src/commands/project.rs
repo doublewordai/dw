@@ -179,7 +179,7 @@ pub fn setup() -> anyhow::Result<()> {
         .unwrap_or("uv sync");
 
     eprintln!("Running setup: {}", setup_cmd);
-    run_shell_command(setup_cmd, &[], &loaded.dir, false)
+    run_shell_command(setup_cmd, &[], &loaded.dir, None)
 }
 
 /// Run a named step from dw.toml.
@@ -202,7 +202,8 @@ pub fn run(step: &str, extra_args: &[String]) -> anyhow::Result<()> {
         eprintln!("{}", desc);
     }
 
-    run_shell_command(&step_def.run, extra_args, &loaded.dir, true)
+    let api_key = resolve_inference_key();
+    run_shell_command(&step_def.run, extra_args, &loaded.dir, api_key.as_deref())
 }
 
 /// Show project info and available steps.
@@ -545,6 +546,8 @@ pub fn run_all(from: usize, continue_run: bool) -> anyhow::Result<()> {
         }
     }
 
+    let api_key = resolve_inference_key();
+
     for (step_num, step) in &steps {
         if *step_num < start_from {
             continue;
@@ -552,7 +555,7 @@ pub fn run_all(from: usize, continue_run: bool) -> anyhow::Result<()> {
 
         eprintln!("\n[{}/{}] {}", step_num, total, step);
 
-        match run_shell_command(step, &[], &loaded.dir, true) {
+        match run_shell_command(step, &[], &loaded.dir, api_key.as_deref()) {
             Ok(()) => {
                 state.record_step(*step_num, step, "completed");
                 state.save(&loaded.dir)?;
@@ -1200,8 +1203,8 @@ fn shell_escape_posix(arg: &str) -> String {
     format!("'{}'", arg.replace('\'', "'\\''"))
 }
 
-/// Resolve the active account's inference API key from `~/.dw/` credentials,
-/// if available. Returns `None` if not logged in or no inference key is stored.
+/// Resolve the active account's inference API key from `~/.dw/` credentials.
+/// Returns `None` if not logged in or no inference key is stored.
 fn resolve_inference_key() -> Option<String> {
     let config = crate::config::load_config();
     let credentials = crate::config::load_credentials();
@@ -1211,18 +1214,17 @@ fn resolve_inference_key() -> Option<String> {
 }
 
 /// Execute a shell command in the manifest's directory.
-/// Uses POSIX `sh`. On Windows, this requires that a `sh` binary is available
-/// on PATH (for example from Git Bash or MSYS2), or that the CLI is run inside
-/// a Linux/WSL environment where `sh` is present.
 ///
-/// When `inject_api_key` is true, sets `DOUBLEWORD_API_KEY` in the subprocess
-/// environment from the active account's inference key (if logged in and the
-/// env var isn't already set). This is scoped to the subprocess only.
+/// When `api_key` is `Some`, sets `DOUBLEWORD_API_KEY` in the subprocess
+/// environment, always overriding any inherited value so billing matches
+/// the CLI's active account. When `None`, the variable is explicitly
+/// removed from the subprocess environment to prevent stale keys from
+/// leaking through.
 fn run_shell_command(
     cmd: &str,
     extra_args: &[String],
     cwd: &Path,
-    inject_api_key: bool,
+    api_key: Option<&str>,
 ) -> anyhow::Result<()> {
     let full_cmd = if extra_args.is_empty() {
         cmd.to_string()
@@ -1234,13 +1236,10 @@ fn run_shell_command(
     let mut command = Command::new("sh");
     command.args(["-c", &full_cmd]).current_dir(cwd);
 
-    // Inject DOUBLEWORD_API_KEY from the active account's inference key.
-    // Always overrides any existing env var so billing matches the CLI's
-    // active account, not a stale key from the user's shell environment.
-    if inject_api_key {
-        if let Some(key) = resolve_inference_key() {
-            command.env("DOUBLEWORD_API_KEY", key);
-        }
+    if let Some(key) = api_key {
+        command.env("DOUBLEWORD_API_KEY", key);
+    } else {
+        command.env_remove("DOUBLEWORD_API_KEY");
     }
 
     let status = command.status().map_err(|e| {
