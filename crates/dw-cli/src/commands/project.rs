@@ -179,7 +179,7 @@ pub fn setup() -> anyhow::Result<()> {
         .unwrap_or("uv sync");
 
     eprintln!("Running setup: {}", setup_cmd);
-    run_shell_command(setup_cmd, &[], &loaded.dir)
+    run_shell_command(setup_cmd, &[], &loaded.dir, false)
 }
 
 /// Run a named step from dw.toml.
@@ -202,7 +202,7 @@ pub fn run(step: &str, extra_args: &[String]) -> anyhow::Result<()> {
         eprintln!("{}", desc);
     }
 
-    run_shell_command(&step_def.run, extra_args, &loaded.dir)
+    run_shell_command(&step_def.run, extra_args, &loaded.dir, true)
 }
 
 /// Show project info and available steps.
@@ -552,7 +552,7 @@ pub fn run_all(from: usize, continue_run: bool) -> anyhow::Result<()> {
 
         eprintln!("\n[{}/{}] {}", step_num, total, step);
 
-        match run_shell_command(step, &[], &loaded.dir) {
+        match run_shell_command(step, &[], &loaded.dir, true) {
             Ok(()) => {
                 state.record_step(*step_num, step, "completed");
                 state.save(&loaded.dir)?;
@@ -1200,15 +1200,30 @@ fn shell_escape_posix(arg: &str) -> String {
     format!("'{}'", arg.replace('\'', "'\\''"))
 }
 
+/// Resolve the active account's inference API key from `~/.dw/` credentials,
+/// if available. Returns `None` if not logged in or no inference key is stored.
+fn resolve_inference_key() -> Option<String> {
+    let config = crate::config::load_config();
+    let credentials = crate::config::load_credentials();
+    crate::config::resolve_account(None, &config, &credentials)
+        .ok()
+        .and_then(|(_, account)| account.inference_key.clone())
+}
+
 /// Execute a shell command in the manifest's directory.
 /// Uses POSIX `sh`. On Windows, this requires that a `sh` binary is available
 /// on PATH (for example from Git Bash or MSYS2), or that the CLI is run inside
 /// a Linux/WSL environment where `sh` is present.
 ///
-/// This helper does not inject credentials; it simply inherits the environment
-/// of the parent process. Project steps that need API access should prefer
-/// `dw` subcommands (which read credentials from `~/.dw/` automatically).
-fn run_shell_command(cmd: &str, extra_args: &[String], cwd: &Path) -> anyhow::Result<()> {
+/// When `inject_api_key` is true, sets `DOUBLEWORD_API_KEY` in the subprocess
+/// environment from the active account's inference key (if logged in and the
+/// env var isn't already set). This is scoped to the subprocess only.
+fn run_shell_command(
+    cmd: &str,
+    extra_args: &[String],
+    cwd: &Path,
+    inject_api_key: bool,
+) -> anyhow::Result<()> {
     let full_cmd = if extra_args.is_empty() {
         cmd.to_string()
     } else {
@@ -1216,20 +1231,28 @@ fn run_shell_command(cmd: &str, extra_args: &[String], cwd: &Path) -> anyhow::Re
         format!("{} {}", cmd, escaped.join(" "))
     };
 
-    let status = Command::new("sh")
-        .args(["-c", &full_cmd])
-        .current_dir(cwd)
-        .status()
-        .map_err(|e| {
-            if e.kind() == std::io::ErrorKind::NotFound {
-                anyhow::anyhow!(
-                    "'sh' not found. On Windows, install Git Bash, WSL, or MSYS2. \
-                     On other systems, ensure /bin/sh is available."
-                )
-            } else {
-                anyhow::anyhow!("Failed to execute command: {}", e)
-            }
-        })?;
+    let mut command = Command::new("sh");
+    command.args(["-c", &full_cmd]).current_dir(cwd);
+
+    // Inject DOUBLEWORD_API_KEY from the active account's inference key.
+    // Always overrides any existing env var so billing matches the CLI's
+    // active account, not a stale key from the user's shell environment.
+    if inject_api_key {
+        if let Some(key) = resolve_inference_key() {
+            command.env("DOUBLEWORD_API_KEY", key);
+        }
+    }
+
+    let status = command.status().map_err(|e| {
+        if e.kind() == std::io::ErrorKind::NotFound {
+            anyhow::anyhow!(
+                "'sh' not found. On Windows, install Git Bash, WSL, or MSYS2. \
+                 On other systems, ensure /bin/sh is available."
+            )
+        } else {
+            anyhow::anyhow!("Failed to execute command: {}", e)
+        }
+    })?;
 
     if !status.success() {
         anyhow::bail!(
