@@ -52,7 +52,7 @@ dw account current
 Configuration is stored in `~/.dw/config.toml`:
 
 ```toml
-active_account = "hamish@doubleword.ai"
+active_account = "you@example.com"
 
 [client]
 timeout = 120
