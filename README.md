@@ -16,7 +16,7 @@ Replaces curl commands and custom scripts with a single tool for managing files,
 curl -fsSL https://raw.githubusercontent.com/doublewordai/dw/main/install.sh | sh
 ```
 
-### pip (macOS recommended — avoids Gatekeeper issues)
+### pip
 
 ```bash
 pip install dw-cli
