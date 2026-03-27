@@ -44,7 +44,7 @@ This uploads the file, creates a batch, watches progress, and pipes results to s
 
 ## 6. Check Cost
 
-`dw stream` prints `Batch: <id>` to stderr when the batch is created. Use that ID to see the cost breakdown:
+For a single input file, `dw stream` prints `Batch: <id>` to stderr when the batch is created. When streaming a directory of multiple JSONL files, batch IDs are printed after streaming completes. Use a printed batch ID to see the cost breakdown:
 
 ```bash
 dw batches analytics <batch-id>
