@@ -263,7 +263,7 @@ pub fn info() -> anyhow::Result<()> {
             pos_a.cmp(&pos_b).then_with(|| a.cmp(b))
         });
 
-        println!("Project Steps (run with `dw project run <step>`):");
+        println!("Custom Project Steps (run with `dw project run <step>`):");
         for (name, step) in &ordered_steps {
             let desc = step.description.as_deref().unwrap_or(&step.run);
             println!("  {:<20} {}", name, desc);
