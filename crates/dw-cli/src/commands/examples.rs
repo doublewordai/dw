@@ -120,8 +120,8 @@ pub async fn clone_example(name: &str, dir: Option<&Path>) -> anyhow::Result<()>
             eprintln!("Cloned '{}' to {}/", name, target_dir.display());
             eprintln!("Get started:");
             eprintln!("  cd {}", target_dir.display());
-            eprintln!("  uv sync");
-            eprintln!("  export DOUBLEWORD_API_KEY=\"your-key\"");
+            eprintln!("  dw project setup");
+            eprintln!("  dw project info");
             Ok(())
         }
         _ => {
