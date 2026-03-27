@@ -6,5 +6,6 @@ language = "en"
 src = "src"
 
 [output.html]
+site-url = "/dw/"
 git-repository-url = "https://github.com/doublewordai/dw"
 edit-url-template = "https://github.com/doublewordai/dw/edit/main/docs/src/{path}"
