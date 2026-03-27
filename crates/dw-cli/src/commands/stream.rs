@@ -70,11 +70,11 @@ pub async fn run(
     }
     stdout.lock().await.flush()?;
 
-    if had_failure {
-        anyhow::bail!("One or more batches failed");
-    }
     for id in &batch_ids {
         eprintln!("Batch: {}", id);
+    }
+    if had_failure {
+        anyhow::bail!("One or more batches failed");
     }
     Ok(())
 }
