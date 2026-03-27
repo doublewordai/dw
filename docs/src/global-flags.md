@@ -17,7 +17,7 @@ These flags are available on every `dw` command.
 The CLI auto-detects the output format based on whether stdout is a TTY:
 
 - **TTY (interactive terminal):** `table` — human-readable tables with headers and alignment
-- **Pipe or redirect:** `json` — one JSON object per line, suitable for `jq` processing
+- **Pipe or redirect:** `json` — JSON output suitable for `jq` processing (NDJSON for lists, pretty-printed for single items)
 
 Override with `--output`:
 

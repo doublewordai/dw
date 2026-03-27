@@ -32,7 +32,7 @@ For SSH sessions, containers, and CI:
 dw login --api-key <YOUR_INFERENCE_KEY>
 ```
 
-API key login stores only the inference key, so some admin commands (webhooks, whoami) won't be available. For full functionality, use browser login with port forwarding.
+API key login stores only the inference key. Commands that use the admin API will not be available, including `dw whoami`, `dw usage`, `dw requests`, `dw keys`, and `dw webhooks`. For full functionality, use browser login (with port forwarding for remote sessions).
 
 ## Credentials Storage
 

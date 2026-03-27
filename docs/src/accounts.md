@@ -55,9 +55,10 @@ Configuration is stored in `~/.dw/config.toml`:
 active_account = "you@example.com"
 
 [client]
-timeout = 120
-max_retries = 3
-poll_interval = 5
+timeout_secs = 300
+connect_timeout_secs = 10
+max_retries = 1
+poll_interval_secs = 2
 ```
 
 ### Server URLs
@@ -82,9 +83,12 @@ Configure in `~/.dw/config.toml` under the `[client]` section:
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `timeout` | `120` | HTTP request timeout in seconds |
-| `max_retries` | `3` | Max retries for transient errors during `watch` |
-| `poll_interval` | `5` | Seconds between polls for `watch` and `stream` |
+| `timeout_secs` | `300` | HTTP request timeout in seconds |
+| `connect_timeout_secs` | `10` | TCP connect timeout in seconds |
+| `max_retries` | `1` | Max retries on transient errors (0–10) |
+| `poll_interval_secs` | `2` | Seconds between polls for `watch` and `stream` (min: 1) |
+
+All fields are optional. Omit individual fields or the entire `[client]` section to use defaults.
 
 ### Viewing Configuration
 
@@ -92,7 +96,7 @@ Configure in `~/.dw/config.toml` under the `[client]` section:
 dw config show
 ```
 
-Shows active account, server URLs, and client settings.
+Shows active account, default output format, and server URLs.
 
 ## Output Formats
 

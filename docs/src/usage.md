@@ -28,7 +28,7 @@ dw requests
 
 Lists recent requests with model, status, latency, and token counts.
 
-> **Note:** The `dw requests` command requires the RequestViewer role. Contact your platform administrator if you need access.
+> **Note:** `dw requests` requires the RequestViewer role and a platform key (browser login). It is not available with `dw login --api-key`.
 
 ### Filtering
 

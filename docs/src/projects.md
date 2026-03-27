@@ -147,7 +147,7 @@ Removes `batches/`, `results/`, and the run state file (`.dw-run.json`).
 
 ## Workflow Comments
 
-Lines in the workflow starting with `#` are treated as comments and displayed in `dw project info` but skipped during `dw project run-all`:
+Lines in the workflow starting with `#` are comments. They are displayed in `dw project info` but skipped during `dw project run-all` and excluded from step numbering for `--from`:
 
 ```toml
 workflow = [
