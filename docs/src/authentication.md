@@ -19,7 +19,7 @@ When you log in with `--org`, the CLI creates credentials scoped to that organiz
 ### Custom Account Name
 
 ```bash
-dw login --as staging
+dw login --as work
 ```
 
 By default the account is named after your email or org. Use `--as` to set a custom name.
@@ -51,7 +51,7 @@ Credentials are stored in `~/.dw/credentials.toml`:
 dw logout
 
 # Log out of a specific account
-dw logout staging
+dw logout work
 
 # Log out of all accounts
 dw logout --all

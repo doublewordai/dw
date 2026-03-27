@@ -45,11 +45,12 @@ setup = "uv sync"
 workflow = [
     "dw project setup",
     "dw project run prepare -- -n 100",
-    "dw files stats output/batch.jsonl",
-    "dw files prepare output/batch.jsonl --model Qwen/Qwen3-VL-30B-A3B-Instruct-FP8",
-    "dw stream output/batch.jsonl > results.jsonl",
+    "dw files stats batches/batch.jsonl",
+    "dw files prepare batches/batch.jsonl --model Qwen/Qwen3-VL-30B-A3B-Instruct-FP8",
+    "dw batches run batches/batch.jsonl --watch --output-id .batch-id",
+    "dw batches results $(cat .batch-id) -o results.jsonl",
     "dw project run analyze -- -r results.jsonl",
-    "dw usage",
+    "dw batches analytics $(cat .batch-id)",
 ]
 
 [steps.prepare]

@@ -15,8 +15,8 @@ dw login
 # Login to an org
 dw login --org my-company --as company
 
-# Login to staging
-dw login --as staging --server https://staging.doubleword.ai
+# Login to a self-hosted deployment
+dw login --as work --server https://dw.internal.example.com
 ```
 
 ### Switching Accounts
@@ -29,7 +29,7 @@ dw account switch company
 ### Using a Specific Account for One Command
 
 ```bash
-dw batches list --account staging
+dw batches list --account company
 ```
 
 The `--account` flag overrides the active account for a single command.
@@ -41,7 +41,7 @@ The `--account` flag overrides the active account for a single command.
 dw account rename old-name new-name
 
 # Remove
-dw account remove staging
+dw account remove old-account
 
 # Show active
 dw account current
@@ -63,17 +63,17 @@ poll_interval_secs = 2
 
 ### Server URLs
 
-For development or staging:
+For self-hosted or custom deployments:
 
 ```bash
 # Point both APIs to one server
-dw config set-url https://staging.doubleword.ai
+dw config set-url https://dw.example.com
 
 # Or set individually
-dw config set-ai-url https://api.staging.doubleword.ai
-dw config set-admin-url https://app.staging.doubleword.ai
+dw config set-ai-url https://api.example.com
+dw config set-admin-url https://app.example.com
 
-# Reset to production defaults
+# Reset to defaults
 dw config reset-urls
 ```
 
