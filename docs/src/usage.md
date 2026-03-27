@@ -18,7 +18,7 @@ dw usage --since 2026-03-01
 dw usage --since 2026-03-01 --until 2026-03-31
 ```
 
-Dates are in ISO 8601 format (YYYY-MM-DD).
+Dates can be `YYYY-MM-DD` (date-only) or full RFC 3339 timestamps (`2026-03-01T00:00:00Z`). Date-only values are treated as midnight UTC.
 
 ## Recent Requests
 
@@ -33,7 +33,7 @@ Lists recent requests with model, status, latency, and token counts.
 ### Filtering
 
 ```bash
-dw requests --model Qwen/Qwen3-VL-30B-A3B-Instruct-FP8 --since 2026-03-27T00:00:00Z
+dw requests --model Qwen/Qwen3-VL-30B-A3B-Instruct-FP8 --since 2026-03-27
 ```
 
 ## Batch Analytics
