@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.12](https://github.com/doublewordai/dw/compare/v0.1.11...v0.1.12) (2026-03-27)
+
+
+### Features
+
+* custom project steps may need the doubleword api key also ([#36](https://github.com/doublewordai/dw/issues/36)) ([9cf8f2a](https://github.com/doublewordai/dw/commit/9cf8f2a9853778c98013148060917f60bc369870))
+* docs imporvements and release please fix ([#34](https://github.com/doublewordai/dw/issues/34)) ([770d1d2](https://github.com/doublewordai/dw/commit/770d1d2ff35ad551a9c12024a78c93833f8c4bed))
+
 ## [0.1.11](https://github.com/doublewordai/dw/compare/v0.1.10...v0.1.11) (2026-03-27)
 
 
