@@ -263,7 +263,7 @@ pub fn info() -> anyhow::Result<()> {
             pos_a.cmp(&pos_b).then_with(|| a.cmp(b))
         });
 
-        println!("Steps:");
+        println!("Custom Project Steps (run with `dw project run <step>`):");
         for (name, step) in &ordered_steps {
             let desc = step.description.as_deref().unwrap_or(&step.run);
             println!("  {:<20} {}", name, desc);
@@ -693,7 +693,7 @@ workflow = [
     "dw batches run batches/batch.jsonl --watch --output-id .batch-id",
     "dw batches results $(cat .batch-id) -o results.jsonl",
     "dw project run analyze",
-    "dw usage",
+    "dw batches analytics $(cat .batch-id)",
 ]
 
 [steps.prepare]
@@ -778,7 +778,7 @@ workflow = [
     "dw batches run batches/batch.jsonl --watch --output-id .batch-id",
     "dw batches results $(cat .batch-id) -o results.jsonl",
     "dw project run analyze -- -r results.jsonl",
-    "dw usage",
+    "dw batches analytics $(cat .batch-id)",
 ]
 
 [steps.prepare]
@@ -793,7 +793,7 @@ run = "uv run {name} analyze"
     )?;
 
     generate_pyproject(dir, name, with_sdks)?;
-    generate_single_batch_cli(dir)?;
+    generate_single_batch_cli(dir, with_sdks)?;
 
     Ok(())
 }
@@ -817,7 +817,7 @@ workflow = [
     "dw batches run batches/stage2.jsonl --watch --output-id .batch-id",
     "dw batches results $(cat .batch-id) -o results/stage2.jsonl",
     "dw project run analyze -- -r results/stage2.jsonl",
-    "dw usage",
+    "dw batches analytics $(cat .batch-id)",
 ]
 
 [steps.prepare-stage1]
@@ -836,7 +836,7 @@ run = "uv run {name} analyze"
     )?;
 
     generate_pyproject(dir, name, with_sdks)?;
-    generate_pipeline_cli(dir)?;
+    generate_pipeline_cli(dir, with_sdks)?;
 
     Ok(())
 }
@@ -877,11 +877,86 @@ where = ["."]
     )
 }
 
-fn generate_single_batch_cli(dir: &Path) -> anyhow::Result<()> {
+fn sdk_stubs(with_sdks: &[String]) -> String {
+    let mut stubs = String::new();
+    for sdk in with_sdks {
+        match sdk.as_str() {
+            "autobatcher" => {
+                stubs.push_str(
+                    r#"
+
+# ---------------------------------------------------------------------------
+# Autobatcher — drop-in async OpenAI client that batches automatically
+# ---------------------------------------------------------------------------
+# Uncomment and adapt the function below to get started.
+#
+# import asyncio
+# from autobatcher import AutoBatcher
+#
+# async def run_with_autobatcher():
+#     """Process prompts via autobatcher — requests are grouped into
+#     batches transparently behind an async OpenAI-compatible client."""
+#     async with AutoBatcher() as client:
+#         tasks = [
+#             client.chat.completions.create(
+#                 model="Qwen/Qwen3-VL-30B-A3B-Instruct-FP8",
+#                 messages=[{"role": "user", "content": prompt}],
+#             )
+#             for prompt in ["Hello", "World"]
+#         ]
+#         results = await asyncio.gather(*tasks)
+#         for r in results:
+#             print(r.choices[0].message.content)
+#
+# # asyncio.run(run_with_autobatcher())
+"#,
+                );
+            }
+            "parfold" => {
+                stubs.push_str(
+                    r#"
+
+# ---------------------------------------------------------------------------
+# Parfold — LLM-powered data primitives (sort, filter, map, reduce)
+# ---------------------------------------------------------------------------
+# Uncomment and adapt the function below to get started.
+#
+# from parfold import parfold
+#
+# def run_with_parfold():
+#     """Use parfold to apply LLM operations over a list of items."""
+#     items = [
+#         "The Rust programming language focuses on safety and performance.",
+#         "Python is popular for data science and machine learning.",
+#         "Go is designed for concurrent networked services.",
+#     ]
+#
+#     # Filter items matching a condition (returns matching items)
+#     systems = parfold.filter(items, "relates to systems programming")
+#
+#     # Sort items by a criterion
+#     ranked = parfold.sort(items, "most relevant to backend development")
+#
+#     # Map: transform each item
+#     summaries = parfold.map(items, "one-sentence summary")
+#
+#     print(summaries)
+#
+# # run_with_parfold()
+"#,
+                );
+            }
+            _ => {}
+        }
+    }
+    stubs
+}
+
+fn generate_single_batch_cli(dir: &Path, with_sdks: &[String]) -> anyhow::Result<()> {
     write_file(&dir.join("src/__init__.py"), "")?;
 
-    write_file(
-        &dir.join("src/cli.py"),
+    let stubs = sdk_stubs(with_sdks);
+    let mut cli_content = String::from(
         r#""""Batch inference project. Edit prepare() and analyze() for your use case."""
 
 import json
@@ -960,19 +1035,23 @@ def analyze(results):
                 errors += 1
 
     click.echo(f"\n{count} results, {errors} errors")
-
-
+"#,
+    );
+    cli_content.push_str(&stubs);
+    cli_content.push_str(
+        r#"
 def main():
     cli()
 "#,
-    )
+    );
+    write_file(&dir.join("src/cli.py"), &cli_content)
 }
 
-fn generate_pipeline_cli(dir: &Path) -> anyhow::Result<()> {
+fn generate_pipeline_cli(dir: &Path, with_sdks: &[String]) -> anyhow::Result<()> {
     write_file(&dir.join("src/__init__.py"), "")?;
 
-    write_file(
-        &dir.join("src/cli.py"),
+    let stubs = sdk_stubs(with_sdks);
+    let mut cli_content = String::from(
         r#""""Multi-stage batch pipeline. Edit the stages for your use case."""
 
 import json
@@ -1095,12 +1174,16 @@ def analyze(results):
                 count += 1
 
     click.echo(f"\n{count} final results")
-
-
+"#,
+    );
+    cli_content.push_str(&stubs);
+    cli_content.push_str(
+        r#"
 def main():
     cli()
 "#,
-    )
+    );
+    write_file(&dir.join("src/cli.py"), &cli_content)
 }
 
 /// Shell-escape a single argument (POSIX).
