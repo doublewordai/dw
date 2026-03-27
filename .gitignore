@@ -6,6 +6,9 @@ results-*.jsonl
 eval.jsonl
 specs/
 
+# mdBook output
+docs/book/
+
 # Python build artifacts
 bindings/python/dist/
 bindings/python/build/

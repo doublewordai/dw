@@ -1,0 +1,46 @@
+name: Deploy docs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - "README.md"
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install mdBook
+        run: |
+          version="v0.4.43"
+          expected_sha="d20c2f20eb1c117dc5ebeec120e2d2f6455c90fe8b4f21b7466625d8b67b9e60"
+          archive="mdbook-${version}-x86_64-unknown-linux-gnu.tar.gz"
+          curl -sSL -o "$archive" "https://github.com/rust-lang/mdBook/releases/download/${version}/${archive}"
+          echo "${expected_sha}  ${archive}" | sha256sum -c --strict
+          tar -xzf "$archive"
+          echo "$PWD" >> "$GITHUB_PATH"
+
+      - name: Build book
+        run: mdbook build docs
+
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: docs/book
+
+      - id: deployment
+        uses: actions/deploy-pages@v4

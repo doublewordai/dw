@@ -462,12 +462,15 @@ pub fn run_all(from: usize, continue_run: bool) -> anyhow::Result<()> {
         anyhow::bail!("Workflow is empty in dw.toml.");
     }
 
-    // Filter out setup steps and reindex contiguously (1-based)
+    // Filter out setup steps, comments, and blank lines; reindex contiguously (1-based)
     let steps: Vec<(usize, &str)> = workflow
         .iter()
         .map(|s| s.trim())
         .filter(|s| {
-            !s.is_empty() && *s != "dw project setup" && !s.starts_with("dw project setup ")
+            !s.is_empty()
+                && !s.starts_with('#')
+                && *s != "dw project setup"
+                && !s.starts_with("dw project setup ")
         })
         .enumerate()
         .map(|(i, s)| (i + 1, s))
