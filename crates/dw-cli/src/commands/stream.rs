@@ -28,16 +28,20 @@ pub async fn run(
     if paths.len() == 1 {
         // Single file: simple sequential flow
         let batch_id = upload_and_create(client, &paths[0], args, None).await?;
-        return stream_single(client, &batch_id, poll_interval_secs, max_retries).await;
+        stream_single(client, &batch_id, poll_interval_secs, max_retries).await?;
+        eprintln!("Batch: {}", batch_id);
+        return Ok(());
     }
 
     // Multiple files: pipeline uploads with concurrent streaming.
     let multi = MultiProgress::new();
     let stdout = std::sync::Arc::new(tokio::sync::Mutex::new(std::io::stdout()));
     let mut stream_handles: Vec<tokio::task::JoinHandle<anyhow::Result<()>>> = Vec::new();
+    let mut batch_ids: Vec<String> = Vec::new();
 
     for path in &paths {
         let batch_id = upload_and_create(client, path, args, Some(&multi)).await?;
+        batch_ids.push(batch_id.clone());
 
         // Spawn streaming immediately — runs while we upload the next file
         let client = client.clone();
@@ -68,6 +72,9 @@ pub async fn run(
 
     if had_failure {
         anyhow::bail!("One or more batches failed");
+    }
+    for id in &batch_ids {
+        eprintln!("Batch: {}", id);
     }
     Ok(())
 }
