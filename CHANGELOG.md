@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.13](https://github.com/doublewordai/dw/compare/v0.1.12...v0.1.13) (2026-03-27)
+
+
+### Bug Fixes
+
+* dw projects based message after clone ([#37](https://github.com/doublewordai/dw/issues/37)) ([49a2eb5](https://github.com/doublewordai/dw/commit/49a2eb5b0a5a166867b52a4b46c97d9cd564f817))
+
 ## [0.1.12](https://github.com/doublewordai/dw/compare/v0.1.11...v0.1.12) (2026-03-27)
 
 
