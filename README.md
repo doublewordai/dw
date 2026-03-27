@@ -10,16 +10,8 @@ Replaces curl commands and custom scripts with a single tool for managing files,
 
 ## Install
 
-### curl (Linux, macOS)
-
 ```bash
 curl -fsSL https://raw.githubusercontent.com/doublewordai/dw/main/install.sh | sh
-```
-
-### pip
-
-```bash
-pip install dw-cli
 ```
 
 ### Build from source
