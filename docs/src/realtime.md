@@ -37,7 +37,7 @@ cat document.txt | dw realtime Qwen/Qwen3-VL-30B-A3B-Instruct-FP8 --system "Summ
 | `--max-tokens <N>` | Maximum tokens to generate |
 | `--temperature <T>` | Sampling temperature (0.0-2.0) |
 | `--no-stream` | Wait for full response instead of streaming |
-| `--output <FILE>` | Write response to a file |
+| `-o`, `--output-file <FILE>` | Write response to a file |
 | `--usage` | Print token usage summary after completion |
 
 ## Non-Streaming Mode
