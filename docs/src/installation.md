@@ -14,7 +14,7 @@ This downloads the latest release binary for your platform and installs it to `~
 pip install dw-cli
 ```
 
-The `dw` binary is bundled as a Python package for convenience. No Python runtime is needed — the package just contains the pre-compiled binary.
+This uses pip to install a Python package that bundles the pre-compiled `dw` binary. Python is only needed for the installation step — the `dw` binary itself has no Python dependency.
 
 ## From Source
 

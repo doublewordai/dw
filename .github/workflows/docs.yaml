@@ -28,7 +28,11 @@ jobs:
       - name: Install mdBook
         run: |
           version="v0.4.43"
-          curl -sSL "https://github.com/rust-lang/mdBook/releases/download/${version}/mdbook-${version}-x86_64-unknown-linux-gnu.tar.gz" | tar -xz
+          expected_sha="d20c2f20eb1c117dc5ebeec120e2d2f6455c90fe8b4f21b7466625d8b67b9e60"
+          archive="mdbook-${version}-x86_64-unknown-linux-gnu.tar.gz"
+          curl -sSL -o "$archive" "https://github.com/rust-lang/mdBook/releases/download/${version}/${archive}"
+          echo "${expected_sha}  ${archive}" | sha256sum -c --strict
+          tar -xzf "$archive"
           echo "$PWD" >> "$GITHUB_PATH"
 
       - name: Build book

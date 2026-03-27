@@ -33,7 +33,7 @@ Lists recent requests with model, status, latency, and token counts.
 ### Filtering
 
 ```bash
-dw requests --model Qwen/Qwen3-VL-30B-A3B-Instruct-FP8 --since 2h
+dw requests --model Qwen/Qwen3-VL-30B-A3B-Instruct-FP8 --since 2026-03-27T00:00:00Z
 ```
 
 ## Batch Analytics
@@ -44,4 +44,4 @@ For per-batch analytics:
 dw batches analytics <batch-id>
 ```
 
-Shows token usage, latency distribution, throughput, and cost for a specific batch.
+Shows token usage (prompt, completion, total), average latency, average TTFB, and cost for a completed batch.
