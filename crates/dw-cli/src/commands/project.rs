@@ -207,7 +207,7 @@ pub fn run(
         eprintln!("{}", desc);
     }
 
-    let api_key = resolve_inference_key(account_override);
+    let api_key = resolve_inference_key(account_override)?;
     run_shell_command(&step_def.run, extra_args, &loaded.dir, api_key.as_deref())
 }
 
@@ -555,7 +555,7 @@ pub fn run_all(
         }
     }
 
-    let api_key = resolve_inference_key(account_override);
+    let api_key = resolve_inference_key(account_override)?;
 
     for (step_num, step) in &steps {
         if *step_num < start_from {
@@ -1215,13 +1215,19 @@ fn shell_escape_posix(arg: &str) -> String {
 /// Resolve the inference API key for the given account (or the active account
 /// if `account_override` is `None`). This is the same account the user selected
 /// via `dw --account <name>` or their active account from `dw account switch`.
-/// Returns `None` if not logged in or no inference key is stored.
-fn resolve_inference_key(account_override: Option<&str>) -> Option<String> {
+///
+/// Errors if an explicit `--account` override doesn't resolve (typo, missing).
+/// Returns `Ok(None)` when no active account is set and no override was given.
+fn resolve_inference_key(account_override: Option<&str>) -> anyhow::Result<Option<String>> {
     let config = crate::config::load_config();
     let credentials = crate::config::load_credentials();
-    crate::config::resolve_account(account_override, &config, &credentials)
-        .ok()
-        .and_then(|(_, account)| account.inference_key.clone())
+    match crate::config::resolve_account(account_override, &config, &credentials) {
+        Ok((_, account)) => Ok(account.inference_key.clone()),
+        Err(e) if account_override.is_some() => {
+            anyhow::bail!("{}", e)
+        }
+        Err(_) => Ok(None),
+    }
 }
 
 /// Execute a shell command in the manifest's directory via POSIX `sh`.
