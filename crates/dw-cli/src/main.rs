@@ -83,9 +83,11 @@ async fn run() -> anyhow::Result<()> {
                 with_sdks,
             } => commands::project::init(name.as_deref(), template.as_deref(), &with_sdks),
             ProjectCommands::Setup => commands::project::setup(),
-            ProjectCommands::Run { step, args } => commands::project::run(&step, &args),
+            ProjectCommands::Run { step, args } => {
+                commands::project::run(&step, &args, cli.account.as_deref())
+            }
             ProjectCommands::RunAll { from, r#continue } => {
-                commands::project::run_all(from, r#continue)
+                commands::project::run_all(from, r#continue, cli.account.as_deref())
             }
             ProjectCommands::Status => commands::project::status(),
             ProjectCommands::Clean => commands::project::clean(),
