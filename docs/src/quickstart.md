@@ -44,7 +44,7 @@ This uploads the file, creates a batch, watches progress, and pipes results to s
 
 ## 6. Check Cost
 
-The batch ID is printed by `dw stream` after completion:
+`dw stream` prints `Batch: <id>` to stderr when the batch is created. Use that ID to see the cost breakdown:
 
 ```bash
 dw batches analytics <batch-id>

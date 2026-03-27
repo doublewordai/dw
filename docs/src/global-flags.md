@@ -52,5 +52,5 @@ Run a command as a different account without switching:
 
 ```bash
 dw batches list --account my-org
-dw batches analytics <batch-id> --account company
+dw models list --account company
 ```

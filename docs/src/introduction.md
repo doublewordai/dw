@@ -23,12 +23,12 @@ dw login
 # See available models
 dw models list
 
-# Run a batch and stream results
+# Run a batch and stream results (prints "Batch: <id>" to stderr)
 dw stream batch.jsonl > results.jsonl
 
 # One-shot inference
 dw realtime Qwen/Qwen3-VL-30B-A3B-Instruct-FP8 "Explain batch inference"
 
-# Check what the batch cost
+# Check what the batch cost (use the batch ID from dw stream output)
 dw batches analytics <batch-id>
 ```
