@@ -8,14 +8,6 @@ curl -fsSL https://raw.githubusercontent.com/doublewordai/dw/main/install.sh | s
 
 This downloads the latest release binary for your platform and installs it to `~/.local/bin/`. The script detects your OS (Linux, macOS) and architecture (x86_64, arm64) automatically.
 
-## pip
-
-```bash
-pip install dw-cli
-```
-
-This uses pip to install a Python package that bundles the pre-compiled `dw` binary. Python is only needed for the installation step — the `dw` binary itself has no Python dependency.
-
 ## From Source
 
 ```bash
