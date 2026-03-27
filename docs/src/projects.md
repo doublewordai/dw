@@ -49,7 +49,6 @@ workflow = [
     "dw files prepare output/batch.jsonl --model Qwen/Qwen3-VL-30B-A3B-Instruct-FP8",
     "dw stream output/batch.jsonl > results.jsonl",
     "dw project run analyze -- -r results.jsonl",
-    "dw usage",
 ]
 
 [steps.prepare]

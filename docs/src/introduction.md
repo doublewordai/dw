@@ -29,6 +29,6 @@ dw stream batch.jsonl > results.jsonl
 # One-shot inference
 dw realtime Qwen/Qwen3-VL-30B-A3B-Instruct-FP8 "Explain batch inference"
 
-# Check what it cost
-dw usage
+# Check what the batch cost
+dw batches analytics <batch-id>
 ```

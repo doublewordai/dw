@@ -34,14 +34,14 @@ dw batches list --output plain
 
 ## Server Overrides
 
-Useful for development, staging environments, or self-hosted deployments:
+Useful for self-hosted or custom deployments:
 
 ```bash
 # Both APIs on the same server
-dw batches list --server https://staging.doubleword.ai
+dw batches list --server https://dw.example.com
 
 # Different URLs for inference and admin
-dw stream batch.jsonl --server-ai https://api.staging.doubleword.ai --server-admin https://app.staging.doubleword.ai
+dw stream batch.jsonl --server-ai https://api.example.com --server-admin https://app.example.com
 ```
 
 For persistent server overrides, use `dw config set-url` instead. See [Accounts & Configuration](accounts.md).
@@ -52,5 +52,5 @@ Run a command as a different account without switching:
 
 ```bash
 dw batches list --account my-org
-dw usage --account staging
+dw batches analytics <batch-id> --account company
 ```
