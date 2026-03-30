@@ -30,7 +30,7 @@ def main():
     except PermissionError:
         print(
             f"Error: Permission denied executing {_BUNDLED}\n"
-            "Try: chmod +x {_BUNDLED}",
+            f"Try: chmod +x {_BUNDLED}",
             file=sys.stderr,
         )
         sys.exit(1)

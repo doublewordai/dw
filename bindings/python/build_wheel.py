@@ -21,13 +21,13 @@ import subprocess
 import sys
 from pathlib import Path
 
-# Platform tags — linux uses manylinux_2_28 to match ubuntu-latest (glibc 2.35).
-# This is conservative: ubuntu-latest ships glibc 2.35, and manylinux_2_28
-# requires glibc >= 2.28. The Rust binary links against glibc dynamically,
-# so it won't work on distros older than glibc 2.28 (e.g., CentOS 7).
+# Platform tags — linux wheels are tagged with generic `linux_*` because the
+# binaries are built on ubuntu-latest, not in a manylinux_2_28 environment.
+# This avoids incorrectly claiming manylinux compatibility when the glibc
+# symbol versions may be newer than those guaranteed by manylinux_2_28.
 PLATFORM_TAGS = {
-    "linux-amd64": "manylinux_2_28_x86_64",
-    "linux-arm64": "manylinux_2_28_aarch64",
+    "linux-amd64": "linux_x86_64",
+    "linux-arm64": "linux_aarch64",
     "darwin-amd64": "macosx_11_0_x86_64",
     "darwin-arm64": "macosx_11_0_arm64",
 }
