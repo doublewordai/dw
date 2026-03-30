@@ -12,7 +12,7 @@ class BinaryDistribution(Distribution):
 class BinaryWheel(bdist_wheel):
     """Override wheel tags to produce py3-none-<platform>."""
     def get_tag(self):
-        python, abi, plat = super().get_tag()
+        _python, _abi, plat = super().get_tag()
         return "py3", "none", plat
 
 
