@@ -1,1 +1,2 @@
 include README.md
+recursive-include dw_cli/bin *

@@ -7,8 +7,8 @@ name = "dw-cli"
 version = "0.1.13"
 description = "Doubleword Batch Inference CLI"
 readme = "README.md"
-requires-python = ">=3.10"
-license = {text = "MIT"}
+requires-python = ">=3.8"
+license = "MIT"
 authors = [
     {name = "Doubleword", email = "engineering@doubleword.ai"},
 ]
@@ -29,3 +29,6 @@ Repository = "https://github.com/doublewordai/dw"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["dw_cli*"]
+
+[tool.setuptools.package-data]
+dw_cli = ["bin/*"]
