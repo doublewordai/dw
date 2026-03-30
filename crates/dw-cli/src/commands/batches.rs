@@ -163,7 +163,9 @@ pub async fn results(
     let bytes = client.get_batch_results(batch_id).await?;
 
     if let Some(path) = output_file {
-        if let Some(parent) = path.parent() {
+        if let Some(parent) = path.parent()
+            && !parent.as_os_str().is_empty()
+        {
             tokio::fs::create_dir_all(parent).await?;
         }
         tokio::fs::write(path, &bytes).await?;
