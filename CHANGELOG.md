@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.15](https://github.com/doublewordai/dw/compare/v0.1.14...v0.1.15) (2026-03-30)
+
+
+### Bug Fixes
+
+* pip installation ([#41](https://github.com/doublewordai/dw/issues/41)) ([0fc4088](https://github.com/doublewordai/dw/commit/0fc4088bc2e21a9b89cf57bb295fb550fd337e4e))
+
 ## [0.1.14](https://github.com/doublewordai/dw/compare/v0.1.13...v0.1.14) (2026-03-27)
 
 
