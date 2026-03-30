@@ -74,7 +74,7 @@ def main():
     subprocess.check_call(
         [
             sys.executable, "-m", "pip", "install", "-q",
-            "setuptools>=68.0", "wheel",
+            "setuptools>=68.0,<77", "wheel",
         ],
         cwd=pkg_dir,
     )
