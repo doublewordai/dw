@@ -9,16 +9,16 @@ pip install dw-cli
 dw --version
 ```
 
-If `dw` is not found after installing, run this once to bootstrap:
+If `dw` is not found after installing, pip's script directory may not be in your PATH. Try:
 
 ```bash
 python3 -m dw_cli --version
 ```
 
-This copies the binary to `~/.local/bin/`. Add it to your PATH if needed:
+Or install via the install script instead:
 
 ```bash
-export PATH="$HOME/.local/bin:$PATH"
+curl -fsSL https://raw.githubusercontent.com/doublewordai/dw/main/install.sh | sh
 ```
 
 ## Usage
@@ -32,6 +32,8 @@ dw realtime model "prompt"            # One-shot inference
 
 ## How it works
 
-This package bundles the pre-built native `dw` binary for your platform. On first run, it installs the binary to `~/.local/bin/` so it's available system-wide. No runtime downloads or network access needed.
+This package bundles the pre-built native `dw` binary for your platform. The `dw` command is a thin wrapper that executes the bundled binary directly — no runtime downloads or network access needed.
 
-For direct installation without Python, see the [main repository](https://github.com/doublewordai/dw).
+Supports Linux (x86_64, arm64) and macOS (x86_64, arm64).
+
+For more information, see the [main repository](https://github.com/doublewordai/dw).

@@ -2,27 +2,32 @@
 """Build a platform-specific wheel with the dw binary bundled inside.
 
 Usage:
-    python build_wheel.py <binary-path> <platform-tag>
+    python build_wheel.py <binary-path> <platform-key>
+
+Platform keys:
+    linux-amd64     → manylinux_2_28_x86_64
+    linux-arm64     → manylinux_2_28_aarch64
+    darwin-amd64    → macosx_11_0_x86_64
+    darwin-arm64    → macosx_11_0_arm64
 
 Example:
-    python build_wheel.py ../../target/release/dw macosx_11_0_arm64
-    python build_wheel.py /path/to/dw-linux-amd64 manylinux_2_17_x86_64
-
-The binary is copied into dw_cli/bin/dw and a wheel is built with the
-given platform tag. The resulting wheel is in dist/.
+    python build_wheel.py ../../target/release/dw darwin-arm64
+    python build_wheel.py /path/to/dw-linux-amd64 linux-amd64
 """
 
-import os
 import shutil
 import stat
 import subprocess
 import sys
 from pathlib import Path
 
-
+# Platform tags — linux uses manylinux_2_28 to match ubuntu-latest (glibc 2.35).
+# This is conservative: ubuntu-latest ships glibc 2.35, and manylinux_2_28
+# requires glibc >= 2.28. The Rust binary links against glibc dynamically,
+# so it won't work on distros older than glibc 2.28 (e.g., CentOS 7).
 PLATFORM_TAGS = {
-    "linux-amd64": "manylinux_2_17_x86_64.manylinux2014_x86_64",
-    "linux-arm64": "manylinux_2_17_aarch64.manylinux2014_aarch64",
+    "linux-amd64": "manylinux_2_28_x86_64",
+    "linux-arm64": "manylinux_2_28_aarch64",
     "darwin-amd64": "macosx_11_0_x86_64",
     "darwin-arm64": "macosx_11_0_arm64",
 }
@@ -66,10 +71,9 @@ def main():
             shutil.rmtree(p)
 
     # Build wheel with platform tag
-    # We use bdist_wheel directly with --plat-name to set the platform tag
     subprocess.check_call(
         [
-            sys.executable, "-m", "pip", "install", "setuptools", "wheel",
+            sys.executable, "-m", "pip", "install", "-q", "setuptools", "wheel",
         ],
         cwd=pkg_dir,
     )
