@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.20](https://github.com/doublewordai/dw/compare/v0.1.19...v0.1.20) (2026-03-30)
+
+
+### Bug Fixes
+
+* verboser ci ([#51](https://github.com/doublewordai/dw/issues/51)) ([5b580e4](https://github.com/doublewordai/dw/commit/5b580e4f230641de99877dceffe2e4e85a0841dc))
+
 ## [0.1.19](https://github.com/doublewordai/dw/compare/v0.1.18...v0.1.19) (2026-03-30)
 
 
