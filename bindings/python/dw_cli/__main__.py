@@ -1,4 +1,4 @@
 """Allow running as python -m dw_cli."""
-from . import main
-
-main()
+if __name__ == "__main__":
+    from . import main
+    main()

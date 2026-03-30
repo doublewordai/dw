@@ -73,7 +73,8 @@ def main():
     # Build wheel with platform tag
     subprocess.check_call(
         [
-            sys.executable, "-m", "pip", "install", "-q", "setuptools", "wheel",
+            sys.executable, "-m", "pip", "install", "-q",
+            "setuptools>=68.0", "wheel",
         ],
         cwd=pkg_dir,
     )
@@ -83,6 +84,7 @@ def main():
             "bdist_wheel",
             "--plat-name", platform_tag,
             "--python-tag", "py3",
+            "--abi-tag", "none",
         ],
         cwd=pkg_dir,
     )
