@@ -13,10 +13,14 @@ try:
     from wheel.bdist_wheel import bdist_wheel
 
     class BinaryWheel(bdist_wheel):
-        """Override wheel tags to produce py3-none-<platform>."""
+        """Override wheel tags: preserve python tag, force ABI to none."""
+        def finalize_options(self):
+            super().finalize_options()
+            self.root_is_pure = False
+
         def get_tag(self):
-            _python, _abi, plat = super().get_tag()
-            return "py3", "none", plat
+            python, _abi, plat = super().get_tag()
+            return python, "none", plat
 
     cmdclass["bdist_wheel"] = BinaryWheel
 except ImportError:
