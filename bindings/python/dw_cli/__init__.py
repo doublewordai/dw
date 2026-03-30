@@ -27,17 +27,13 @@ def main():
     try:
         result = subprocess.run([str(_BUNDLED)] + sys.argv[1:])
         sys.exit(result.returncode)
-    except PermissionError:
+    except OSError as e:
+        # Covers PermissionError, missing dynamic linker, incompatible glibc, etc.
         print(
-            f"Error: Permission denied executing {_BUNDLED}\n"
-            f"Try: chmod +x {_BUNDLED}",
-            file=sys.stderr,
-        )
-        sys.exit(1)
-    except FileNotFoundError:
-        print(
-            f"Error: Binary not found at {_BUNDLED}\n"
-            "Try reinstalling: pip install --force-reinstall dw-cli",
+            f"Error: Could not execute {_BUNDLED}: {e}\n"
+            f"This may be a platform compatibility issue.\n"
+            f"Try: chmod +x {_BUNDLED}\n"
+            f"Or install via: curl -fsSL https://raw.githubusercontent.com/doublewordai/dw/main/install.sh | sh",
             file=sys.stderr,
         )
         sys.exit(1)

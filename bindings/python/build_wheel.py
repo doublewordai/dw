@@ -5,8 +5,8 @@ Usage:
     python build_wheel.py <binary-path> <platform-key>
 
 Platform keys:
-    linux-amd64     → manylinux_2_28_x86_64
-    linux-arm64     → manylinux_2_28_aarch64
+    linux-amd64     → linux_x86_64
+    linux-arm64     → linux_aarch64
     darwin-amd64    → macosx_11_0_x86_64
     darwin-arm64    → macosx_11_0_arm64
 
@@ -86,10 +86,23 @@ def main():
         cwd=pkg_dir,
     )
 
-    # List built wheels
+    # Validate the built wheel has the correct platform tag (not pure/any)
     dist_dir = pkg_dir / "dist"
-    for whl in dist_dir.glob("*.whl"):
-        print(f"Built: {whl.name} ({whl.stat().st_size / 1024 / 1024:.1f} MB)")
+    wheels = list(dist_dir.glob("*.whl"))
+    if not wheels:
+        print("Error: No wheel was built", file=sys.stderr)
+        sys.exit(1)
+
+    for whl in wheels:
+        name = whl.name
+        if "-any.whl" in name or "none-any" in name:
+            print(
+                f"Error: Wheel {name} has 'any' platform tag — expected {platform_tag}.\n"
+                "The wheel would install on all platforms but only contains a single binary.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        print(f"Built: {name} ({whl.stat().st_size / 1024 / 1024:.1f} MB)")
 
     # Clean up the binary from the source tree
     target.unlink()
