@@ -5,8 +5,8 @@ Usage:
     python build_wheel.py <binary-path> <platform-key>
 
 Platform keys:
-    linux-amd64     → linux_x86_64
-    linux-arm64     → linux_aarch64
+    linux-amd64     → manylinux_2_35_x86_64
+    linux-arm64     → manylinux_2_35_aarch64
     darwin-amd64    → macosx_11_0_x86_64
     darwin-arm64    → macosx_11_0_arm64
 
@@ -21,13 +21,13 @@ import subprocess
 import sys
 from pathlib import Path
 
-# Platform tags — linux wheels are tagged with generic `linux_*` because the
-# binaries are built on ubuntu-latest, not in a manylinux_2_28 environment.
-# This avoids incorrectly claiming manylinux compatibility when the glibc
-# symbol versions may be newer than those guaranteed by manylinux_2_28.
+# Platform tags — PyPI requires manylinux tags for Linux wheels (bare linux_*
+# is rejected). We use manylinux_2_35 to match ubuntu-latest's glibc 2.35,
+# which honestly reflects the actual binary compatibility. Users on older
+# distros (glibc < 2.35) should use the install script instead.
 PLATFORM_TAGS = {
-    "linux-amd64": "linux_x86_64",
-    "linux-arm64": "linux_aarch64",
+    "linux-amd64": "manylinux_2_35_x86_64",
+    "linux-arm64": "manylinux_2_35_aarch64",
     "darwin-amd64": "macosx_11_0_x86_64",
     "darwin-arm64": "macosx_11_0_arm64",
 }
