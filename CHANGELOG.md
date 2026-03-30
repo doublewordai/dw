@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.16](https://github.com/doublewordai/dw/compare/v0.1.15...v0.1.16) (2026-03-30)
+
+
+### Bug Fixes
+
+* not releasing ([#43](https://github.com/doublewordai/dw/issues/43)) ([f702605](https://github.com/doublewordai/dw/commit/f702605ffae73b64081b3d48f9633225397aa617))
+
 ## [0.1.15](https://github.com/doublewordai/dw/compare/v0.1.14...v0.1.15) (2026-03-30)
 
 
