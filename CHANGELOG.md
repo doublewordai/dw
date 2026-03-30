@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.21](https://github.com/doublewordai/dw/compare/v0.1.20...v0.1.21) (2026-03-30)
+
+
+### Bug Fixes
+
+* manylinuxes for wheel builds ([#53](https://github.com/doublewordai/dw/issues/53)) ([f1ec927](https://github.com/doublewordai/dw/commit/f1ec927536b23fae97b9c337d9011d2d5620d0dc))
+
 ## [0.1.20](https://github.com/doublewordai/dw/compare/v0.1.19...v0.1.20) (2026-03-30)
 
 
