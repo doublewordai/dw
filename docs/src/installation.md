@@ -8,6 +8,24 @@ curl -fsSL https://raw.githubusercontent.com/doublewordai/dw/main/install.sh | s
 
 This downloads the latest release binary for your platform and installs it to `~/.local/bin/`. The script detects your OS (Linux, macOS) and architecture (x86_64, arm64) automatically.
 
+## pip
+
+```bash
+pip install --user dw-cli
+```
+
+If pip warns that the script directory is not on PATH, add it:
+
+```bash
+# macOS
+export PATH="$HOME/Library/Python/3.12/bin:$PATH"
+
+# Linux
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+Add the appropriate line to your `~/.zshrc` or `~/.bashrc` to make it permanent.
+
 ## From Source
 
 ```bash

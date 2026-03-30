@@ -10,9 +10,29 @@ Replaces curl commands and custom scripts with a single tool for managing files,
 
 ## Install
 
+### Install script (Linux, macOS)
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/doublewordai/dw/main/install.sh | sh
 ```
+
+### pip
+
+```bash
+pip install --user dw-cli
+```
+
+If pip warns that the script directory is not on PATH, add it:
+
+```bash
+# macOS
+export PATH="$HOME/Library/Python/3.12/bin:$PATH"
+
+# Linux
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+Add the appropriate line to your `~/.zshrc` or `~/.bashrc` to make it permanent.
 
 ### Build from source
 
