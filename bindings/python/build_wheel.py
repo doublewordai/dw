@@ -82,23 +82,27 @@ def main():
             sys.executable, "setup.py",
             "bdist_wheel",
             "--plat-name", platform_tag,
+            "--python-tag", "py3",
         ],
         cwd=pkg_dir,
     )
 
-    # Validate the built wheel has the correct platform tag (not pure/any)
+    # Validate the built wheel has the expected tag: py3-none-<platform>
     dist_dir = pkg_dir / "dist"
     wheels = list(dist_dir.glob("*.whl"))
     if not wheels:
         print("Error: No wheel was built", file=sys.stderr)
         sys.exit(1)
 
+    expected_suffix = f"py3-none-{platform_tag}.whl"
     for whl in wheels:
         name = whl.name
-        if "-any.whl" in name or "none-any" in name:
+        if not name.endswith(expected_suffix):
             print(
-                f"Error: Wheel {name} has 'any' platform tag — expected {platform_tag}.\n"
-                "The wheel would install on all platforms but only contains a single binary.",
+                f"Error: Wheel tag mismatch.\n"
+                f"  Built:    {name}\n"
+                f"  Expected: *-{expected_suffix}\n"
+                "The wheel may not install on all Python versions or may target the wrong platform.",
                 file=sys.stderr,
             )
             sys.exit(1)
