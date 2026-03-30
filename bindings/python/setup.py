@@ -1,5 +1,6 @@
 from setuptools import setup
 from setuptools.dist import Distribution
+from wheel.bdist_wheel import bdist_wheel
 
 
 class BinaryDistribution(Distribution):
@@ -8,4 +9,11 @@ class BinaryDistribution(Distribution):
         return True
 
 
-setup(distclass=BinaryDistribution)
+class BinaryWheel(bdist_wheel):
+    """Override wheel tags to produce py3-none-<platform>."""
+    def get_tag(self):
+        python, abi, plat = super().get_tag()
+        return "py3", "none", plat
+
+
+setup(distclass=BinaryDistribution, cmdclass={"bdist_wheel": BinaryWheel})

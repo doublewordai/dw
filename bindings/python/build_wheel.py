@@ -84,7 +84,6 @@ def main():
             "bdist_wheel",
             "--plat-name", platform_tag,
             "--python-tag", "py3",
-            "--abi-tag", "none",
         ],
         cwd=pkg_dir,
     )
