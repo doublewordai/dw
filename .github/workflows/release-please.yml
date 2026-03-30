@@ -105,10 +105,21 @@ jobs:
             --repo ${{ github.repository }}
 
   publish-python:
-    name: Publish Python Package
+    name: Publish Python Wheels
     needs: [release-please, publish-release]
     if: ${{ needs.release-please.outputs.release_created }}
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - artifact: dw-linux-amd64
+            platform: linux-amd64
+          - artifact: dw-linux-arm64
+            platform: linux-arm64
+          - artifact: dw-darwin-amd64
+            platform: darwin-amd64
+          - artifact: dw-darwin-arm64
+            platform: darwin-arm64
     steps:
       - uses: actions/checkout@v4
 
@@ -116,12 +127,36 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Build package
+      - name: Download binary artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: bindings/python/
+
+      - name: Build platform wheel
         run: |
-          pip install build
+          pip install setuptools wheel
           cd bindings/python
-          rm -rf dist/ build/ *.egg-info/
-          python -m build
+          python build_wheel.py ${{ matrix.artifact }} ${{ matrix.platform }}
+
+      - name: Upload wheel artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheel-${{ matrix.platform }}
+          path: bindings/python/dist/*.whl
+
+  publish-pypi:
+    name: Publish to PyPI
+    needs: [release-please, publish-python]
+    if: ${{ needs.release-please.outputs.release_created }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all wheel artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: wheel-*
+          path: wheels/
+          merge-multiple: true
 
       - name: Publish to PyPI
         env:
@@ -129,4 +164,5 @@ jobs:
           TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
         run: |
           pip install twine
-          twine upload bindings/python/dist/*
+          ls -la wheels/
+          twine upload wheels/*.whl
