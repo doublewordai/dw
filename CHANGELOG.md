@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.22](https://github.com/doublewordai/dw/compare/v0.1.21...v0.1.22) (2026-03-31)
+
+
+### Bug Fixes
+
+* suggest pipx for installation ([#55](https://github.com/doublewordai/dw/issues/55)) ([f840803](https://github.com/doublewordai/dw/commit/f8408038ced2da3097105984449bbf74fb7b9e18))
+
 ## [0.1.21](https://github.com/doublewordai/dw/compare/v0.1.20...v0.1.21) (2026-03-30)
 
 
