@@ -22,6 +22,12 @@ curl -fsSL https://raw.githubusercontent.com/doublewordai/dw/main/install.sh | s
 pip install --user dw-cli
 ```
 
+On Linux, if you get an `externally-managed-environment` error, use `pipx` instead:
+
+```bash
+pipx install dw-cli
+```
+
 If pip warns that the script directory is not on PATH, add it:
 
 ```bash
