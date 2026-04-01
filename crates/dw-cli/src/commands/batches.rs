@@ -169,18 +169,27 @@ pub async fn results(
         {
             tokio::fs::create_dir_all(parent).await?;
         }
-        // Stream each batch's results directly to the file
-        let file = tokio::fs::File::create(path).await?;
-        let mut writer = tokio::io::BufWriter::new(file);
-        for batch_id in &batch_ids {
-            let bytes = client.get_batch_results(batch_id).await?;
-            tokio::io::AsyncWriteExt::write_all(&mut writer, &bytes).await?;
-            // Ensure newline between batches
-            if !bytes.ends_with(b"\n") {
-                tokio::io::AsyncWriteExt::write_all(&mut writer, b"\n").await?;
+        // Write to a temp file and rename on success to avoid partial output
+        let tmp = path.with_extension("jsonl.tmp");
+        let write_result = async {
+            let file = tokio::fs::File::create(&tmp).await?;
+            let mut writer = tokio::io::BufWriter::new(file);
+            for batch_id in &batch_ids {
+                let bytes = client.get_batch_results(batch_id).await?;
+                tokio::io::AsyncWriteExt::write_all(&mut writer, &bytes).await?;
+                if !bytes.ends_with(b"\n") {
+                    tokio::io::AsyncWriteExt::write_all(&mut writer, b"\n").await?;
+                }
             }
+            tokio::io::AsyncWriteExt::flush(&mut writer).await?;
+            anyhow::Ok(())
         }
-        tokio::io::AsyncWriteExt::flush(&mut writer).await?;
+        .await;
+        if let Err(e) = write_result {
+            let _ = tokio::fs::remove_file(&tmp).await;
+            return Err(e);
+        }
+        tokio::fs::rename(&tmp, path).await?;
         eprintln!(
             "Results written to {} ({} batch{})",
             path.display(),
@@ -513,7 +522,7 @@ async fn resolve_batch_ids(
         }
     }
     if result.is_empty() {
-        anyhow::bail!("No batch IDs provided");
+        anyhow::bail!("No batch IDs provided. Pass IDs as arguments or use --from-file <FILE>");
     }
     Ok(result)
 }
