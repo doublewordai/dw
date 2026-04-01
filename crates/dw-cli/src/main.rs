@@ -276,13 +276,8 @@ async fn run() -> anyhow::Result<()> {
                             .await
                     }
                     BatchCommands::Analytics { ids, from_file } => {
-                        commands::batches::analytics(
-                            &client,
-                            &ids,
-                            from_file.as_deref(),
-                            format,
-                        )
-                        .await
+                        commands::batches::analytics(&client, &ids, from_file.as_deref(), format)
+                            .await
                     }
                 },
 
