@@ -161,7 +161,7 @@ pub async fn results(
     from_file: Option<&Path>,
     output_file: Option<&Path>,
 ) -> anyhow::Result<()> {
-    let batch_ids = resolve_batch_ids(ids, from_file)?;
+    let batch_ids = resolve_batch_ids(ids, from_file).await?;
 
     if let Some(path) = output_file {
         if let Some(parent) = path.parent()
@@ -169,17 +169,18 @@ pub async fn results(
         {
             tokio::fs::create_dir_all(parent).await?;
         }
-        // Append all results into one file
-        let mut all_bytes = Vec::new();
-        for (i, batch_id) in batch_ids.iter().enumerate() {
+        // Stream each batch's results directly to the file
+        let file = tokio::fs::File::create(path).await?;
+        let mut writer = tokio::io::BufWriter::new(file);
+        for batch_id in &batch_ids {
             let bytes = client.get_batch_results(batch_id).await?;
-            all_bytes.extend_from_slice(&bytes);
+            tokio::io::AsyncWriteExt::write_all(&mut writer, &bytes).await?;
             // Ensure newline between batches
-            if i < batch_ids.len() - 1 && !bytes.ends_with(b"\n") {
-                all_bytes.push(b'\n');
+            if !bytes.ends_with(b"\n") {
+                tokio::io::AsyncWriteExt::write_all(&mut writer, b"\n").await?;
             }
         }
-        tokio::fs::write(path, &all_bytes).await?;
+        tokio::io::AsyncWriteExt::flush(&mut writer).await?;
         eprintln!(
             "Results written to {} ({} batch{})",
             path.display(),
@@ -193,6 +194,9 @@ pub async fn results(
         for batch_id in &batch_ids {
             let bytes = client.get_batch_results(batch_id).await?;
             out.write_all(&bytes)?;
+            if !bytes.ends_with(b"\n") {
+                out.write_all(b"\n")?;
+            }
         }
     }
     Ok(())
@@ -474,21 +478,32 @@ pub async fn analytics(
     from_file: Option<&Path>,
     format: crate::output::OutputFormat,
 ) -> anyhow::Result<()> {
-    let batch_ids = resolve_batch_ids(ids, from_file)?;
+    let batch_ids = resolve_batch_ids(ids, from_file).await?;
+    let multi = batch_ids.len() > 1;
     for (i, batch_id) in batch_ids.iter().enumerate() {
-        if i > 0 && format == crate::output::OutputFormat::Table {
+        if multi && format == crate::output::OutputFormat::Table && i > 0 {
             println!();
         }
-        crate::commands::usage::batch_analytics(client, batch_id, format).await?;
+        if multi && format == crate::output::OutputFormat::Json {
+            // NDJSON: one compact JSON object per line for multi-batch output
+            let a = client.get_batch_analytics(batch_id).await?;
+            println!("{}", serde_json::to_string(&a)?);
+        } else {
+            crate::commands::usage::batch_analytics(client, batch_id, format).await?;
+        }
     }
     Ok(())
 }
 
 /// Resolve batch IDs from positional args and/or a file (one ID per line).
-fn resolve_batch_ids(ids: &[String], from_file: Option<&Path>) -> anyhow::Result<Vec<String>> {
+async fn resolve_batch_ids(
+    ids: &[String],
+    from_file: Option<&Path>,
+) -> anyhow::Result<Vec<String>> {
     let mut result: Vec<String> = ids.to_vec();
     if let Some(path) = from_file {
-        let content = std::fs::read_to_string(path)
+        let content = tokio::fs::read_to_string(path)
+            .await
             .map_err(|e| anyhow::anyhow!("Failed to read {}: {}", path.display(), e))?;
         for line in content.lines() {
             let trimmed = line.trim();
