@@ -507,8 +507,8 @@ pub async fn analytics(
             // NDJSON: one compact JSON object per line for multi-batch output
             let a = client.get_batch_analytics(batch_id).await?;
             println!("{}", serde_json::to_string(&a)?);
-        } else if format == crate::output::OutputFormat::Plain {
-            // Always include batch ID for consistent, scriptable output
+        } else if multi && format == crate::output::OutputFormat::Plain {
+            // Prefix with batch ID so multi-batch rows are identifiable
             let a = client.get_batch_analytics(batch_id).await?;
             println!(
                 "{}\t{}\t{}\t{}\t{}",
