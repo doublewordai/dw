@@ -169,7 +169,9 @@ pub async fn results(
         {
             tokio::fs::create_dir_all(parent).await?;
         }
-        // Write to a temp file and rename on success to avoid partial output
+        // Write to a temp file and rename on success to avoid partial output.
+        // Batches are fetched sequentially to preserve output order; the typical
+        // case is 1–10 IDs so concurrency adds complexity without meaningful gain.
         let tmp = path.with_extension("jsonl.tmp");
         let write_result = async {
             let file = tokio::fs::File::create(&tmp).await?;
@@ -191,7 +193,7 @@ pub async fn results(
         }
         // On Unix, rename overwrites atomically. On Windows it may fail
         // if the destination exists, so remove it first when present.
-        if path.exists() {
+        if tokio::fs::try_exists(path).await.unwrap_or(false) {
             let _ = tokio::fs::remove_file(path).await;
         }
         if let Err(e) = tokio::fs::rename(&tmp, path).await {
@@ -505,8 +507,8 @@ pub async fn analytics(
             // NDJSON: one compact JSON object per line for multi-batch output
             let a = client.get_batch_analytics(batch_id).await?;
             println!("{}", serde_json::to_string(&a)?);
-        } else if multi && format == crate::output::OutputFormat::Plain {
-            // Include batch ID prefix when multiple batches for scriptability
+        } else if format == crate::output::OutputFormat::Plain {
+            // Always include batch ID for consistent, scriptable output
             let a = client.get_batch_analytics(batch_id).await?;
             println!(
                 "{}\t{}\t{}\t{}\t{}",
