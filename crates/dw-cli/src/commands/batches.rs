@@ -189,19 +189,14 @@ pub async fn results(
             let _ = tokio::fs::remove_file(&tmp).await;
             return Err(e);
         }
-        // Try rename; on Windows rename fails if destination exists, so
-        // fall back to remove + retry only for that specific error.
+        // On Unix, rename overwrites atomically. On Windows it may fail
+        // if the destination exists, so remove it first when present.
+        if path.exists() {
+            let _ = tokio::fs::remove_file(path).await;
+        }
         if let Err(e) = tokio::fs::rename(&tmp, path).await {
-            if e.kind() == std::io::ErrorKind::AlreadyExists {
-                let _ = tokio::fs::remove_file(path).await;
-                if let Err(e2) = tokio::fs::rename(&tmp, path).await {
-                    let _ = tokio::fs::remove_file(&tmp).await;
-                    return Err(e2.into());
-                }
-            } else {
-                let _ = tokio::fs::remove_file(&tmp).await;
-                return Err(e.into());
-            }
+            let _ = tokio::fs::remove_file(&tmp).await;
+            return Err(e.into());
         }
         eprintln!(
             "Results written to {} ({} batch{})",
@@ -510,8 +505,8 @@ pub async fn analytics(
             // NDJSON: one compact JSON object per line for multi-batch output
             let a = client.get_batch_analytics(batch_id).await?;
             println!("{}", serde_json::to_string(&a)?);
-        } else if format == crate::output::OutputFormat::Plain {
-            // Always include batch ID in plain output for scriptability
+        } else if multi && format == crate::output::OutputFormat::Plain {
+            // Include batch ID prefix when multiple batches for scriptability
             let a = client.get_batch_analytics(batch_id).await?;
             println!(
                 "{}\t{}\t{}\t{}\t{}",
