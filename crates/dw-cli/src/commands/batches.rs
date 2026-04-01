@@ -189,7 +189,12 @@ pub async fn results(
             let _ = tokio::fs::remove_file(&tmp).await;
             return Err(e);
         }
-        tokio::fs::rename(&tmp, path).await?;
+        // Remove existing file first (rename doesn't overwrite on Windows)
+        let _ = tokio::fs::remove_file(path).await;
+        if let Err(e) = tokio::fs::rename(&tmp, path).await {
+            let _ = tokio::fs::remove_file(&tmp).await;
+            return Err(e.into());
+        }
         eprintln!(
             "Results written to {} ({} batch{})",
             path.display(),
