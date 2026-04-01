@@ -178,6 +178,9 @@ pub async fn results(
             let mut writer = tokio::io::BufWriter::new(file);
             for batch_id in &batch_ids {
                 let bytes = client.get_batch_results(batch_id).await?;
+                if bytes.is_empty() {
+                    continue;
+                }
                 tokio::io::AsyncWriteExt::write_all(&mut writer, &bytes).await?;
                 if !bytes.ends_with(b"\n") {
                     tokio::io::AsyncWriteExt::write_all(&mut writer, b"\n").await?;
@@ -195,12 +198,18 @@ pub async fn results(
         // destination exists, so we remove it and retry only in that case.
         if let Err(e) = tokio::fs::rename(&tmp, path).await {
             #[cfg(windows)]
+            if e.kind() == std::io::ErrorKind::PermissionDenied
+                || e.kind() == std::io::ErrorKind::AlreadyExists
             {
+                // Windows rename fails when destination exists; remove and retry
                 let _ = tokio::fs::remove_file(path).await;
                 if let Err(e2) = tokio::fs::rename(&tmp, path).await {
                     let _ = tokio::fs::remove_file(&tmp).await;
                     return Err(e2.into());
                 }
+            } else {
+                let _ = tokio::fs::remove_file(&tmp).await;
+                return Err(e.into());
             }
             #[cfg(not(windows))]
             {
@@ -218,6 +227,9 @@ pub async fn results(
         use std::io::Write;
         for batch_id in &batch_ids {
             let bytes = client.get_batch_results(batch_id).await?;
+            if bytes.is_empty() {
+                continue;
+            }
             // Lock stdout only for the write, not across await points
             let mut out = std::io::stdout().lock();
             out.write_all(&bytes)?;
