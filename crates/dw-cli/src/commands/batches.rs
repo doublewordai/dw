@@ -206,10 +206,10 @@ pub async fn results(
         );
     } else {
         use std::io::Write;
-        let stdout = std::io::stdout();
-        let mut out = stdout.lock();
         for batch_id in &batch_ids {
             let bytes = client.get_batch_results(batch_id).await?;
+            // Lock stdout only for the write, not across await points
+            let mut out = std::io::stdout().lock();
             out.write_all(&bytes)?;
             if !bytes.ends_with(b"\n") {
                 out.write_all(b"\n")?;
