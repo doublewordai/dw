@@ -189,11 +189,19 @@ pub async fn results(
             let _ = tokio::fs::remove_file(&tmp).await;
             return Err(e);
         }
-        // Remove existing file first (rename doesn't overwrite on Windows)
-        let _ = tokio::fs::remove_file(path).await;
+        // Try rename; on Windows rename fails if destination exists, so
+        // fall back to remove + retry only for that specific error.
         if let Err(e) = tokio::fs::rename(&tmp, path).await {
-            let _ = tokio::fs::remove_file(&tmp).await;
-            return Err(e.into());
+            if e.kind() == std::io::ErrorKind::AlreadyExists {
+                let _ = tokio::fs::remove_file(path).await;
+                if let Err(e2) = tokio::fs::rename(&tmp, path).await {
+                    let _ = tokio::fs::remove_file(&tmp).await;
+                    return Err(e2.into());
+                }
+            } else {
+                let _ = tokio::fs::remove_file(&tmp).await;
+                return Err(e.into());
+            }
         }
         eprintln!(
             "Results written to {} ({} batch{})",
@@ -502,8 +510,8 @@ pub async fn analytics(
             // NDJSON: one compact JSON object per line for multi-batch output
             let a = client.get_batch_analytics(batch_id).await?;
             println!("{}", serde_json::to_string(&a)?);
-        } else if multi && format == crate::output::OutputFormat::Plain {
-            // Prefix with batch ID so rows are identifiable
+        } else if format == crate::output::OutputFormat::Plain {
+            // Always include batch ID in plain output for scriptability
             let a = client.get_batch_analytics(batch_id).await?;
             println!(
                 "{}\t{}\t{}\t{}\t{}",
