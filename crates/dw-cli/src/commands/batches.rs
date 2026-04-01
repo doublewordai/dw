@@ -191,14 +191,22 @@ pub async fn results(
             let _ = tokio::fs::remove_file(&tmp).await;
             return Err(e);
         }
-        // On Unix, rename overwrites atomically. On Windows it may fail
-        // if the destination exists, so remove it first when present.
-        if tokio::fs::try_exists(path).await.unwrap_or(false) {
-            let _ = tokio::fs::remove_file(path).await;
-        }
+        // On Unix, rename overwrites atomically. On Windows it fails if the
+        // destination exists, so we remove it and retry only in that case.
         if let Err(e) = tokio::fs::rename(&tmp, path).await {
-            let _ = tokio::fs::remove_file(&tmp).await;
-            return Err(e.into());
+            #[cfg(windows)]
+            {
+                let _ = tokio::fs::remove_file(path).await;
+                if let Err(e2) = tokio::fs::rename(&tmp, path).await {
+                    let _ = tokio::fs::remove_file(&tmp).await;
+                    return Err(e2.into());
+                }
+            }
+            #[cfg(not(windows))]
+            {
+                let _ = tokio::fs::remove_file(&tmp).await;
+                return Err(e.into());
+            }
         }
         eprintln!(
             "Results written to {} ({} batch{})",
