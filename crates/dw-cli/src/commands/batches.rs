@@ -198,18 +198,39 @@ pub async fn results(
         // destination exists, so we remove it and retry only in that case.
         if let Err(e) = tokio::fs::rename(&tmp, path).await {
             #[cfg(windows)]
-            if e.kind() == std::io::ErrorKind::PermissionDenied
-                || e.kind() == std::io::ErrorKind::AlreadyExists
             {
-                // Windows rename fails when destination exists; remove and retry
-                let _ = tokio::fs::remove_file(path).await;
-                if let Err(e2) = tokio::fs::rename(&tmp, path).await {
+                if e.kind() == std::io::ErrorKind::PermissionDenied
+                    || e.kind() == std::io::ErrorKind::AlreadyExists
+                {
+                    // Windows rename fails when destination exists; back up the
+                    // existing file and restore it if the second rename fails.
+                    let backup = path.with_extension("bak");
+                    let mut backup_created = false;
+                    if tokio::fs::metadata(path).await.is_ok() {
+                        if let Err(backup_err) = tokio::fs::rename(path, &backup).await {
+                            let _ = tokio::fs::remove_file(&tmp).await;
+                            return Err(backup_err.into());
+                        }
+                        backup_created = true;
+                    }
+                    match tokio::fs::rename(&tmp, path).await {
+                        Ok(()) => {
+                            if backup_created {
+                                let _ = tokio::fs::remove_file(&backup).await;
+                            }
+                        }
+                        Err(e2) => {
+                            let _ = tokio::fs::remove_file(&tmp).await;
+                            if backup_created {
+                                let _ = tokio::fs::rename(&backup, path).await;
+                            }
+                            return Err(e2.into());
+                        }
+                    }
+                } else {
                     let _ = tokio::fs::remove_file(&tmp).await;
-                    return Err(e2.into());
+                    return Err(e.into());
                 }
-            } else {
-                let _ = tokio::fs::remove_file(&tmp).await;
-                return Err(e.into());
             }
             #[cfg(not(windows))]
             {
