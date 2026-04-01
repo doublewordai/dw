@@ -254,8 +254,18 @@ async fn run() -> anyhow::Result<()> {
                     BatchCommands::Retry { id } => {
                         commands::batches::retry(&client, &id, format).await
                     }
-                    BatchCommands::Results { id, output_file } => {
-                        commands::batches::results(&client, &id, output_file.as_deref()).await
+                    BatchCommands::Results {
+                        ids,
+                        output_file,
+                        from_file,
+                    } => {
+                        commands::batches::results(
+                            &client,
+                            &ids,
+                            from_file.as_deref(),
+                            output_file.as_deref(),
+                        )
+                        .await
                     }
                     BatchCommands::Run(args) => {
                         commands::batches::run(&client, &args, format, poll_interval, max_retries)
@@ -265,8 +275,14 @@ async fn run() -> anyhow::Result<()> {
                         commands::batches::watch_batches(&client, &ids, poll_interval, max_retries)
                             .await
                     }
-                    BatchCommands::Analytics { id } => {
-                        commands::usage::batch_analytics(&client, &id, format).await
+                    BatchCommands::Analytics { ids, from_file } => {
+                        commands::batches::analytics(
+                            &client,
+                            &ids,
+                            from_file.as_deref(),
+                            format,
+                        )
+                        .await
                     }
                 },
 

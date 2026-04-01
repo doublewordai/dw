@@ -157,10 +157,11 @@ pub async fn retry(client: &DwClient, batch_id: &str, format: OutputFormat) -> a
 
 pub async fn results(
     client: &DwClient,
-    batch_id: &str,
+    ids: &[String],
+    from_file: Option<&Path>,
     output_file: Option<&Path>,
 ) -> anyhow::Result<()> {
-    let bytes = client.get_batch_results(batch_id).await?;
+    let batch_ids = resolve_batch_ids(ids, from_file)?;
 
     if let Some(path) = output_file {
         if let Some(parent) = path.parent()
@@ -168,11 +169,31 @@ pub async fn results(
         {
             tokio::fs::create_dir_all(parent).await?;
         }
-        tokio::fs::write(path, &bytes).await?;
-        eprintln!("Results written to {}", path.display());
+        // Append all results into one file
+        let mut all_bytes = Vec::new();
+        for (i, batch_id) in batch_ids.iter().enumerate() {
+            let bytes = client.get_batch_results(batch_id).await?;
+            all_bytes.extend_from_slice(&bytes);
+            // Ensure newline between batches
+            if i < batch_ids.len() - 1 && !bytes.ends_with(b"\n") {
+                all_bytes.push(b'\n');
+            }
+        }
+        tokio::fs::write(path, &all_bytes).await?;
+        eprintln!(
+            "Results written to {} ({} batch{})",
+            path.display(),
+            batch_ids.len(),
+            if batch_ids.len() == 1 { "" } else { "es" }
+        );
     } else {
         use std::io::Write;
-        std::io::stdout().write_all(&bytes)?;
+        let stdout = std::io::stdout();
+        let mut out = stdout.lock();
+        for batch_id in &batch_ids {
+            let bytes = client.get_batch_results(batch_id).await?;
+            out.write_all(&bytes)?;
+        }
     }
     Ok(())
 }
@@ -444,6 +465,42 @@ pub async fn watch_single(
 
         tokio::time::sleep(Duration::from_secs(poll_interval_secs)).await;
     }
+}
+
+/// Show analytics for one or more batches.
+pub async fn analytics(
+    client: &DwClient,
+    ids: &[String],
+    from_file: Option<&Path>,
+    format: crate::output::OutputFormat,
+) -> anyhow::Result<()> {
+    let batch_ids = resolve_batch_ids(ids, from_file)?;
+    for (i, batch_id) in batch_ids.iter().enumerate() {
+        if i > 0 && format == crate::output::OutputFormat::Table {
+            println!();
+        }
+        crate::commands::usage::batch_analytics(client, batch_id, format).await?;
+    }
+    Ok(())
+}
+
+/// Resolve batch IDs from positional args and/or a file (one ID per line).
+fn resolve_batch_ids(ids: &[String], from_file: Option<&Path>) -> anyhow::Result<Vec<String>> {
+    let mut result: Vec<String> = ids.to_vec();
+    if let Some(path) = from_file {
+        let content = std::fs::read_to_string(path)
+            .map_err(|e| anyhow::anyhow!("Failed to read {}: {}", path.display(), e))?;
+        for line in content.lines() {
+            let trimmed = line.trim();
+            if !trimmed.is_empty() {
+                result.push(trimmed.to_string());
+            }
+        }
+    }
+    if result.is_empty() {
+        anyhow::bail!("No batch IDs provided");
+    }
+    Ok(result)
 }
 
 /// Collect .jsonl file paths from a file or directory.

@@ -48,9 +48,9 @@ workflow = [
     "dw files stats batches/batch.jsonl",
     "dw files prepare batches/batch.jsonl --model Qwen/Qwen3-VL-30B-A3B-Instruct-FP8",
     "dw batches run batches/batch.jsonl --watch --output-id .batch-id",
-    "dw batches results $(cat .batch-id) -o results.jsonl",
+    "dw batches results --from-file .batch-id -o results.jsonl",
     "dw project run analyze -- -r results.jsonl",
-    "dw batches analytics $(cat .batch-id)",
+    "dw batches analytics --from-file .batch-id",
 ]
 
 [steps.prepare]
