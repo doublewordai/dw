@@ -105,6 +105,7 @@ dw batches analytics batch-abc123
 Shows token usage, latency breakdown, and cost for a completed batch. Supports multiple IDs:
 
 ```bash
+dw batches analytics id1 id2
 dw batches analytics --from-file .batch-id
 ```
 

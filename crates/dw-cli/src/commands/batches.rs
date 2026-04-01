@@ -497,6 +497,17 @@ pub async fn analytics(
             // NDJSON: one compact JSON object per line for multi-batch output
             let a = client.get_batch_analytics(batch_id).await?;
             println!("{}", serde_json::to_string(&a)?);
+        } else if multi && format == crate::output::OutputFormat::Plain {
+            // Prefix with batch ID so rows are identifiable
+            let a = client.get_batch_analytics(batch_id).await?;
+            println!(
+                "{}\t{}\t{}\t{}\t{}",
+                batch_id,
+                a.total_requests,
+                a.total_tokens,
+                a.avg_duration_ms.unwrap_or(0.0),
+                a.total_cost.as_deref().unwrap_or("0")
+            );
         } else {
             crate::commands::usage::batch_analytics(client, batch_id, format).await?;
         }
