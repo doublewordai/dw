@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.23](https://github.com/doublewordai/dw/compare/v0.1.22...v0.1.23) (2026-04-02)
+
+
+### Features
+
+* allow a file with multiple batch ids as input to certain commands ([#57](https://github.com/doublewordai/dw/issues/57)) ([b794e5a](https://github.com/doublewordai/dw/commit/b794e5a31006d635e9e95fd67e5e84fe6959656f))
+
 ## [0.1.22](https://github.com/doublewordai/dw/compare/v0.1.21...v0.1.22) (2026-03-31)
 
 
