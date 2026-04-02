@@ -545,9 +545,14 @@ pub async fn analytics(
             println!();
         }
         if multi && format == crate::output::OutputFormat::Json {
-            // NDJSON: one compact JSON object per line for multi-batch output
+            // NDJSON: one compact JSON object per line for multi-batch output,
+            // including the batch_id so each line is attributable.
             let a = client.get_batch_analytics(batch_id).await?;
-            println!("{}", serde_json::to_string(&a)?);
+            let envelope = serde_json::json!({
+                "batch_id": batch_id,
+                "analytics": a,
+            });
+            println!("{}", serde_json::to_string(&envelope)?);
         } else if multi && format == crate::output::OutputFormat::Plain {
             // Prefix with batch ID so multi-batch rows are identifiable
             let a = client.get_batch_analytics(batch_id).await?;
