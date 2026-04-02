@@ -89,7 +89,12 @@ dw batches list --all
 dw batches results batch-abc123 -o results.jsonl
 ```
 
-Without `-o`, results are printed to stdout.
+Without `-o`, results are printed to stdout. Multiple IDs can be passed to combine results:
+
+```bash
+dw batches results id1 id2 id3 -o results.jsonl
+dw batches results --from-file .batch-id -o results.jsonl
+```
 
 ### Batch Analytics
 
@@ -97,7 +102,12 @@ Without `-o`, results are printed to stdout.
 dw batches analytics batch-abc123
 ```
 
-Shows token usage, latency breakdown, and cost for a completed batch.
+Shows token usage, latency breakdown, and cost for a completed batch. Supports multiple IDs:
+
+```bash
+dw batches analytics id1 id2
+dw batches analytics --from-file .batch-id
+```
 
 ## Cancellation and Retry
 

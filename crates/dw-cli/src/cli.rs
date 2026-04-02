@@ -434,11 +434,15 @@ pub enum BatchCommands {
     },
     /// Download batch results.
     Results {
-        /// Batch ID.
-        id: String,
+        /// Batch ID(s).
+        #[arg(required_unless_present = "from_file")]
+        ids: Vec<String>,
         /// Write to file instead of stdout.
         #[arg(long, short = 'o')]
         output_file: Option<PathBuf>,
+        /// Read batch IDs from a file (one per line).
+        #[arg(long, value_name = "FILE")]
+        from_file: Option<PathBuf>,
     },
     /// Upload and create a batch in one step.
     Run(BatchRunArgs),
@@ -450,8 +454,12 @@ pub enum BatchCommands {
     },
     /// Show analytics for a batch (tokens, latency, cost).
     Analytics {
-        /// Batch ID.
-        id: String,
+        /// Batch ID(s).
+        #[arg(required_unless_present = "from_file")]
+        ids: Vec<String>,
+        /// Read batch IDs from a file (one per line).
+        #[arg(long, value_name = "FILE")]
+        from_file: Option<PathBuf>,
     },
 }
 

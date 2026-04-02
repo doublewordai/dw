@@ -70,9 +70,9 @@ Full reference for all `dw` commands. Run `dw <command> --help` for details on a
 | `dw batches get <ID>` | Get batch details |
 | `dw batches cancel <ID>` | Cancel a running batch |
 | `dw batches retry <ID>` | Retry failed requests |
-| `dw batches results <ID>` | Download results |
+| `dw batches results <IDS...>` | Download results (or `--from-file`) |
 | `dw batches watch <IDS...>` | Watch batch progress |
-| `dw batches analytics <ID>` | Show batch analytics |
+| `dw batches analytics <IDS...>` | Show batch analytics (or `--from-file`) |
 
 ## Stream
 

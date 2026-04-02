@@ -157,10 +157,11 @@ pub async fn retry(client: &DwClient, batch_id: &str, format: OutputFormat) -> a
 
 pub async fn results(
     client: &DwClient,
-    batch_id: &str,
+    ids: &[String],
+    from_file: Option<&Path>,
     output_file: Option<&Path>,
 ) -> anyhow::Result<()> {
-    let bytes = client.get_batch_results(batch_id).await?;
+    let batch_ids = resolve_batch_ids(ids, from_file).await?;
 
     if let Some(path) = output_file {
         if let Some(parent) = path.parent()
@@ -168,11 +169,95 @@ pub async fn results(
         {
             tokio::fs::create_dir_all(parent).await?;
         }
-        tokio::fs::write(path, &bytes).await?;
-        eprintln!("Results written to {}", path.display());
+        // Write to a temp file and rename on success to avoid partial output.
+        // Batches are fetched sequentially to preserve output order; the typical
+        // case is 1–10 IDs so concurrency adds complexity without meaningful gain.
+        let tmp = path.with_extension("jsonl.tmp");
+        let write_result = async {
+            let file = tokio::fs::File::create(&tmp).await?;
+            let mut writer = tokio::io::BufWriter::new(file);
+            for batch_id in &batch_ids {
+                let bytes = client.get_batch_results(batch_id).await?;
+                if bytes.is_empty() {
+                    continue;
+                }
+                tokio::io::AsyncWriteExt::write_all(&mut writer, &bytes).await?;
+                if !bytes.ends_with(b"\n") {
+                    tokio::io::AsyncWriteExt::write_all(&mut writer, b"\n").await?;
+                }
+            }
+            tokio::io::AsyncWriteExt::flush(&mut writer).await?;
+            anyhow::Ok(())
+        }
+        .await;
+        if let Err(e) = write_result {
+            let _ = tokio::fs::remove_file(&tmp).await;
+            return Err(e);
+        }
+        // On Unix, rename overwrites atomically. On Windows it fails if the
+        // destination exists, so we remove it and retry only in that case.
+        if let Err(e) = tokio::fs::rename(&tmp, path).await {
+            #[cfg(windows)]
+            {
+                if e.kind() == std::io::ErrorKind::PermissionDenied
+                    || e.kind() == std::io::ErrorKind::AlreadyExists
+                {
+                    // Windows rename fails when destination exists; back up the
+                    // existing file and restore it if the second rename fails.
+                    let backup = path.with_extension("bak");
+                    let mut backup_created = false;
+                    if tokio::fs::metadata(path).await.is_ok() {
+                        if let Err(backup_err) = tokio::fs::rename(path, &backup).await {
+                            let _ = tokio::fs::remove_file(&tmp).await;
+                            return Err(backup_err.into());
+                        }
+                        backup_created = true;
+                    }
+                    match tokio::fs::rename(&tmp, path).await {
+                        Ok(()) => {
+                            if backup_created {
+                                let _ = tokio::fs::remove_file(&backup).await;
+                            }
+                        }
+                        Err(e2) => {
+                            let _ = tokio::fs::remove_file(&tmp).await;
+                            if backup_created {
+                                let _ = tokio::fs::rename(&backup, path).await;
+                            }
+                            return Err(e2.into());
+                        }
+                    }
+                } else {
+                    let _ = tokio::fs::remove_file(&tmp).await;
+                    return Err(e.into());
+                }
+            }
+            #[cfg(not(windows))]
+            {
+                let _ = tokio::fs::remove_file(&tmp).await;
+                return Err(e.into());
+            }
+        }
+        eprintln!(
+            "Results written to {} ({} batch{})",
+            path.display(),
+            batch_ids.len(),
+            if batch_ids.len() == 1 { "" } else { "es" }
+        );
     } else {
         use std::io::Write;
-        std::io::stdout().write_all(&bytes)?;
+        for batch_id in &batch_ids {
+            let bytes = client.get_batch_results(batch_id).await?;
+            if bytes.is_empty() {
+                continue;
+            }
+            // Lock stdout only for the write, not across await points
+            let mut out = std::io::stdout().lock();
+            out.write_all(&bytes)?;
+            if !bytes.ends_with(b"\n") {
+                out.write_all(b"\n")?;
+            }
+        }
     }
     Ok(())
 }
@@ -444,6 +529,69 @@ pub async fn watch_single(
 
         tokio::time::sleep(Duration::from_secs(poll_interval_secs)).await;
     }
+}
+
+/// Show analytics for one or more batches.
+pub async fn analytics(
+    client: &DwClient,
+    ids: &[String],
+    from_file: Option<&Path>,
+    format: crate::output::OutputFormat,
+) -> anyhow::Result<()> {
+    let batch_ids = resolve_batch_ids(ids, from_file).await?;
+    let multi = batch_ids.len() > 1;
+    for (i, batch_id) in batch_ids.iter().enumerate() {
+        if multi && format == crate::output::OutputFormat::Table && i > 0 {
+            println!();
+        }
+        if multi && format == crate::output::OutputFormat::Json {
+            // NDJSON: one compact JSON object per line for multi-batch output,
+            // including the batch_id so each line is attributable.
+            let a = client.get_batch_analytics(batch_id).await?;
+            let envelope = serde_json::json!({
+                "batch_id": batch_id,
+                "analytics": a,
+            });
+            println!("{}", serde_json::to_string(&envelope)?);
+        } else if multi && format == crate::output::OutputFormat::Plain {
+            // Prefix with batch ID so multi-batch rows are identifiable
+            let a = client.get_batch_analytics(batch_id).await?;
+            println!(
+                "{}\t{}\t{}\t{}\t{}",
+                batch_id,
+                a.total_requests,
+                a.total_tokens,
+                a.avg_duration_ms.unwrap_or(0.0),
+                a.total_cost.as_deref().unwrap_or("0")
+            );
+        } else {
+            crate::commands::usage::batch_analytics(client, batch_id, format).await?;
+        }
+    }
+    Ok(())
+}
+
+/// Resolve batch IDs from positional args and/or a file (one ID per line).
+async fn resolve_batch_ids(
+    ids: &[String],
+    from_file: Option<&Path>,
+) -> anyhow::Result<Vec<String>> {
+    let mut result: Vec<String> = ids.to_vec();
+    if let Some(path) = from_file {
+        let content = tokio::fs::read_to_string(path)
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to read {}: {}", path.display(), e))?;
+        for line in content.lines() {
+            let trimmed = line.trim();
+            if !trimmed.is_empty() {
+                result.push(trimmed.to_string());
+            }
+        }
+    }
+    if result.is_empty() {
+        anyhow::bail!("No batch IDs provided. Pass IDs as arguments or use --from-file <FILE>");
+    }
+    Ok(result)
 }
 
 /// Collect .jsonl file paths from a file or directory.
