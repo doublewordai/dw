@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.1.24](https://github.com/doublewordai/dw/compare/v0.1.23...v0.1.24) (2026-06-01)
+
+
+### Bug Fixes
+
+* **deps:** bump rand from 0.9.2 to 0.9.3 ([#61](https://github.com/doublewordai/dw/issues/61)) ([2a437ec](https://github.com/doublewordai/dw/commit/2a437ec3923286b1ecfd034e8b9825d24961c719))
+* **deps:** bump rustls-webpki from 0.103.9 to 0.103.13 ([#60](https://github.com/doublewordai/dw/issues/60)) ([b19f95e](https://github.com/doublewordai/dw/commit/b19f95eac6be8c34143e8f68e240ef8083466c65))
+* **deps:** bump tar from 0.4.44 to 0.4.46 ([#63](https://github.com/doublewordai/dw/issues/63)) ([63b1966](https://github.com/doublewordai/dw/commit/63b196601e1bb4e94abb1858d2d5bba449798577))
+
 ## [0.1.23](https://github.com/doublewordai/dw/compare/v0.1.22...v0.1.23) (2026-04-02)
 
 
