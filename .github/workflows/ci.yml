@@ -72,6 +72,10 @@ jobs:
             echo "It must be set under 'Secrets and variables -> Actions' (not Dependabot/Codespaces)."
             exit 1
           fi
+          # Defence-in-depth: explicitly add the key to the runner's mask
+          # list so any accidental future echo of it gets redacted, even if
+          # GitHub's automatic masking misses a transformed/encoded form.
+          echo "::add-mask::$DW_PLATFORM_KEY"
           echo "DW_PLATFORM_KEY is set (length: ${#DW_PLATFORM_KEY})."
 
           # Fetch the two OpenAPI specs. Print HTTP status on failure so the
@@ -81,12 +85,24 @@ jobs:
             local url="$1"
             local out="$2"
             local status
-            status=$(curl -s -o "$out" -w '%{http_code}' \
-              -H "Authorization: Bearer $DW_PLATFORM_KEY" "$url")
+            local curl_rc=0
+            # -sS keeps curl quiet on success but prints transport-layer
+            # errors (DNS, TLS, connection refused, etc.) to stderr.
+            # Capture curl's exit code explicitly so set -e doesn't kill
+            # the step before our non-200 handler runs.
+            status=$(curl -sS -o "$out" -w '%{http_code}' \
+              -H "Authorization: Bearer $DW_PLATFORM_KEY" "$url") || curl_rc=$?
+            if [ "$curl_rc" -ne 0 ]; then
+              echo "::error::curl transport failure for $url (exit $curl_rc)"
+              return 1
+            fi
             if [ "$status" != "200" ]; then
               echo "::error::Fetch failed for $url (HTTP $status)"
+              # Prefix each response-body line so any GitHub Actions workflow
+              # command (e.g. `::error::`) in the upstream response can't be
+              # interpreted as a runner command (log-command injection).
               echo "First 200 chars of response body:"
-              head -c 200 "$out" || true
+              head -c 200 "$out" 2>/dev/null | sed 's/^/[body] /' || true
               echo ""
               return 1
             fi
