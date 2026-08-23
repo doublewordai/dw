@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.25](https://github.com/doublewordai/dw/compare/v0.1.24...v0.1.25) (2026-08-23)
+
+
+### Bug Fixes
+
+* **deps:** bump quinn-proto from 0.11.14 to 0.11.16 ([#68](https://github.com/doublewordai/dw/issues/68)) ([e7e2e5a](https://github.com/doublewordai/dw/commit/e7e2e5a197f43548ef1d49cb2221e26c56bfd3db))
+* **deps:** pin actions/download-artifact to v4.3.0 (GHSA-cxww-7g56-2vh6) ([#66](https://github.com/doublewordai/dw/issues/66)) ([84e2b65](https://github.com/doublewordai/dw/commit/84e2b652ca42b1f21dcaf4971346597fcfbc721a))
+
 ## [0.1.24](https://github.com/doublewordai/dw/compare/v0.1.23...v0.1.24) (2026-06-01)
 
 
