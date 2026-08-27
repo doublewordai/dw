@@ -1,0 +1,27 @@
+{
+    "version": "0.1.25",
+    "description": "Doubleword Batch Inference CLI. Upload JSONL files, run batches, stream results, and send real-time inference requests.",
+    "homepage": "https://github.com/doublewordai/dw",
+    "license": "MIT",
+    "architecture": {
+        "64bit": {
+            "url": "https://github.com/doublewordai/dw/releases/download/v0.1.25/dw-windows-amd64.exe#/dw.exe",
+            "hash": "0000000000000000000000000000000000000000000000000000000000000000"
+        }
+    },
+    "bin": "dw.exe",
+    "checkver": {
+        "github": "https://github.com/doublewordai/dw"
+    },
+    "autoupdate": {
+        "architecture": {
+            "64bit": {
+                "url": "https://github.com/doublewordai/dw/releases/download/v$version/dw-windows-amd64.exe#/dw.exe"
+            }
+        },
+        "hash": {
+            "url": "https://github.com/doublewordai/dw/releases/download/v$version/checksums.txt",
+            "regex": "$sha256\\s+dw-windows-amd64\\.exe"
+        }
+    }
+}
