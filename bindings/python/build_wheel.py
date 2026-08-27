@@ -9,6 +9,7 @@ Platform keys:
     linux-arm64     → manylinux_2_35_aarch64
     darwin-amd64    → macosx_11_0_x86_64
     darwin-arm64    → macosx_11_0_arm64
+    windows-amd64   → win_amd64
 
 Example:
     python build_wheel.py ../../target/release/dw darwin-arm64
@@ -30,7 +31,18 @@ PLATFORM_TAGS = {
     "linux-arm64": "manylinux_2_35_aarch64",
     "darwin-amd64": "macosx_11_0_x86_64",
     "darwin-arm64": "macosx_11_0_arm64",
+    "windows-amd64": "win_amd64",
 }
+
+
+def bundled_binary_name(platform_key):
+    """Name the binary gets inside the package.
+
+    Windows needs the .exe extension to run the file. This uses the target
+    platform rather than the machine building the wheel, since Windows wheels
+    are built on Linux. It must match what dw_cli/__init__.py looks for.
+    """
+    return "dw.exe" if platform_key.startswith("windows-") else "dw"
 
 
 def main():
@@ -58,7 +70,7 @@ def main():
     bin_dir = pkg_dir / "dw_cli" / "bin"
     bin_dir.mkdir(exist_ok=True)
 
-    target = bin_dir / "dw"
+    target = bin_dir / bundled_binary_name(platform_key)
     shutil.copy2(binary_path, target)
     target.chmod(target.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
 

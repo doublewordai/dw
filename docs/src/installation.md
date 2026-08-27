@@ -8,6 +8,27 @@ curl -fsSL https://raw.githubusercontent.com/doublewordai/dw/main/install.sh | s
 
 This downloads the latest release binary for your platform and installs it to `~/.local/bin/`. The script detects your OS (Linux, macOS) and architecture (x86_64, arm64) automatically.
 
+## Windows
+
+```powershell
+irm https://raw.githubusercontent.com/doublewordai/dw/main/install.ps1 | iex
+```
+
+This installs `dw.exe` to `%LOCALAPPDATA%\Programs\dw` and adds it to your PATH.
+
+Or use a package manager:
+
+```powershell
+choco install dw
+```
+
+```powershell
+scoop bucket add dw https://github.com/doublewordai/dw
+scoop install dw
+```
+
+`dw` runs natively on Windows, no WSL needed. The exception is `dw project`, which runs its steps through `sh` and so needs Git Bash, WSL, or MSYS2.
+
 ## pip
 
 ```bash
@@ -35,6 +56,8 @@ cargo build --release
 cp target/release/dw ~/.local/bin/
 ```
 
+On Windows the built binary is `target\release\dw.exe`.
+
 Requires Rust 2024 edition (1.85+).
 
 ## Verify
@@ -56,6 +79,9 @@ dw completions zsh > ~/.zfunc/_dw
 
 # Fish
 dw completions fish > ~/.config/fish/completions/dw.fish
+
+# PowerShell
+dw completions powershell >> $PROFILE
 ```
 
 ## Updating
@@ -65,3 +91,5 @@ dw update
 ```
 
 This downloads the latest release from GitHub, verifies the checksum, and replaces the binary in place.
+
+On Windows the running binary cannot be overwritten, so `dw update` renames it to `dw.exe.old` first. The next update deletes that leftover file.

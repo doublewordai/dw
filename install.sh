@@ -40,6 +40,10 @@ detect_platform() {
     case "$OS" in
         linux) OS="linux" ;;
         darwin) OS="darwin" ;;
+        # Git Bash, MSYS2 and Cygwin report these on Windows.
+        mingw* | msys* | cygwin*)
+            error "This script is for Linux and macOS. On Windows, run in PowerShell:
+  irm https://raw.githubusercontent.com/doublewordai/dw/main/install.ps1 | iex" ;;
         *) error "Unsupported operating system: $OS" ;;
     esac
 

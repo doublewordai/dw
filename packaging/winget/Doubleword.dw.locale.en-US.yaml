@@ -1,0 +1,36 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.6.0.schema.json
+PackageIdentifier: Doubleword.dw
+PackageVersion: 0.1.25
+PackageLocale: en-US
+Publisher: Doubleword
+PublisherUrl: https://doubleword.ai
+PublisherSupportUrl: https://github.com/doublewordai/dw/issues
+PackageName: dw
+PackageUrl: https://github.com/doublewordai/dw
+License: MIT
+LicenseUrl: https://github.com/doublewordai/dw/blob/main/LICENSE
+Copyright: Copyright (c) Doubleword
+ShortDescription: Command-line tool for the Doubleword batch inference platform.
+Description: |-
+  dw is the command-line tool for the Doubleword batch inference platform. Upload JSONL files,
+  run batches, stream results, and send real-time inference requests, all from the terminal.
+
+  It replaces curl commands and custom scripts with a single tool for managing files, running
+  batches, and sending inference requests. Built for developers who interact with the API
+  directly, scripts that automate batch workflows, and AI agents building data pipelines.
+
+  Runs natively in PowerShell, CMD, or a bash shell. WSL is not required. The dw project
+  subcommand executes its steps through sh, so it needs Git Bash, WSL, or MSYS2.
+Moniker: dw
+Tags:
+  - ai
+  - batch
+  - cli
+  - inference
+  - llm
+ReleaseNotesUrl: https://github.com/doublewordai/dw/releases/tag/v0.1.25
+Documentations:
+  - DocumentLabel: Documentation
+    DocumentUrl: https://doublewordai.github.io/dw/
+ManifestType: defaultLocale
+ManifestVersion: 1.6.0
