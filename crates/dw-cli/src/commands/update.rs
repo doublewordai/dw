@@ -170,14 +170,34 @@ pub async fn run() -> anyhow::Result<()> {
 
         if let Err(e) = std::fs::rename(&temp_path, &current_exe) {
             // Put the old binary back so the install still works.
-            let _ = std::fs::rename(&old_path, &current_exe);
-            let _ = std::fs::remove_file(&temp_path);
-            anyhow::bail!(
-                "Could not replace binary at {}: {}. {}",
-                current_exe.display(),
-                e,
-                replace_failure_hint()
-            );
+            match std::fs::rename(&old_path, &current_exe) {
+                Ok(()) => {
+                    let _ = std::fs::remove_file(&temp_path);
+                    anyhow::bail!(
+                        "Could not replace binary at {}: {}. {}",
+                        current_exe.display(),
+                        e,
+                        replace_failure_hint()
+                    );
+                }
+                Err(rollback_err) => {
+                    // Both renames failed: current_exe is now missing. Leave
+                    // temp_path and old_path alone (don't delete either) so
+                    // the user has something to recover from instead of no
+                    // working binary at all.
+                    anyhow::bail!(
+                        "Could not replace binary at {}: {}. Restoring the previous version also \
+                         failed: {}. The working binary is still at {} — rename it back to {} \
+                         manually, or reinstall. {}",
+                        current_exe.display(),
+                        e,
+                        rollback_err,
+                        old_path.display(),
+                        current_exe.display(),
+                        replace_failure_hint()
+                    );
+                }
+            }
         }
 
         // This fails while dw is still running, which is expected. The next

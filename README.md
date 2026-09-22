@@ -22,7 +22,7 @@ curl -fsSL https://raw.githubusercontent.com/doublewordai/dw/main/install.sh | s
 irm https://raw.githubusercontent.com/doublewordai/dw/main/install.ps1 | iex
 ```
 
-Chocolatey and Scoop packages are in progress but not yet published — see
+Chocolatey, Scoop, and WinGet packages are in progress but not yet published — see
 [`packaging/`](./packaging) for status.
 
 `dw` runs natively on Windows, no WSL needed. The exception is `dw project`,

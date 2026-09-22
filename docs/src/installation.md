@@ -16,7 +16,7 @@ irm https://raw.githubusercontent.com/doublewordai/dw/main/install.ps1 | iex
 
 This installs `dw.exe` to `%LOCALAPPDATA%\Programs\dw` and adds it to your PATH.
 
-Chocolatey and Scoop packages are in progress but not yet published — see
+Chocolatey, Scoop, and WinGet packages are in progress but not yet published — see
 [`packaging/`](https://github.com/doublewordai/dw/tree/main/packaging) for status.
 
 `dw` runs natively on Windows, no WSL needed. The exception is `dw project`, which runs its steps through `sh` and so needs Git Bash, WSL, or MSYS2.
@@ -73,6 +73,7 @@ dw completions zsh > ~/.zfunc/_dw
 dw completions fish > ~/.config/fish/completions/dw.fish
 
 # PowerShell
+New-Item -ItemType Directory -Force -Path (Split-Path $PROFILE) | Out-Null
 dw completions powershell >> $PROFILE
 ```
 
@@ -84,4 +85,4 @@ dw update
 
 This downloads the latest release from GitHub, verifies the checksum, and replaces the binary in place.
 
-On Windows the running binary cannot be overwritten, so `dw update` renames it to `dw.exe.old` first. The next update deletes that leftover file.
+On Windows the running binary cannot be overwritten, so `dw update` renames it to `dw.exe.old` first. A later update that installs a newer release deletes that leftover file.

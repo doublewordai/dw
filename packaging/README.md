@@ -41,7 +41,7 @@ Two things to keep if you edit the manifest:
 
 - The download URL ends in `#/dw.exe`. Scoop reads that as a rename, so the file
   lands as `dw.exe` and the command is `dw`. Without it you get
-  `dw-windows-amd64`.
+  `dw-windows-amd64.exe`.
 - `autoupdate.hash.regex` matches the `dw-windows-amd64.exe` line specifically,
   because `checksums.txt` lists every platform.
 
@@ -83,9 +83,9 @@ Two constraints to know before the first submission:
 - **`PackageIdentifier` is permanent once accepted.** It is currently
   `Doubleword.dw`. Change it now if `DoublewordAI.dw` is preferred.
 - **The first version must be submitted by hand** as a PR to
-  `microsoft/winget-pkgs`. Both `wingetcreate` and the `winget-releaser` action
-  require a version to already exist in the community repo, so CI automation is
-  only possible from the second release onward.
+  `microsoft/winget-pkgs`. `wingetcreate new` can generate and submit it, but no
+  automated CI (the `winget-releaser` action needs an existing upstream version) can, so CI
+  automation is only possible from the second release onward.
 
 ## Automating subsequent releases
 

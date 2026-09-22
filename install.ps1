@@ -50,7 +50,22 @@ try {
     if ($actual -ne $expected.ToUpper()) { Fail 'Checksum verification failed.' }
 
     New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
-    Move-Item $tmpExe (Join-Path $InstallDir 'dw.exe') -Force
+    $finalExe = Join-Path $InstallDir 'dw.exe'
+    $oldExe = "$finalExe.old"
+
+    if (Test-Path $finalExe) {
+        # A running dw.exe can't be overwritten directly, but Windows does allow
+        # renaming it aside, mirroring the swap `dw update` performs.
+        Remove-Item $oldExe -Force -ErrorAction SilentlyContinue
+        try {
+            Rename-Item $finalExe $oldExe -Force
+        } catch {
+            Fail "Could not replace the existing dw.exe at $finalExe. Close any running dw processes and try again."
+        }
+    }
+
+    Move-Item $tmpExe $finalExe -Force
+    Remove-Item $oldExe -Force -ErrorAction SilentlyContinue
 } finally {
     Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue
 }
@@ -75,7 +90,9 @@ try {
     $present = $entries | Where-Object { $_.TrimEnd('\') -ieq $target }
 
     if (-not $present) {
-        $key.SetValue('Path', (($entries + $InstallDir) -join ';'), $kind)
+        # Prepend rather than append, so this install takes precedence over any
+        # older dw.exe already on PATH (e.g. from pip or a from-source build).
+        $key.SetValue('Path', ((@($InstallDir) + $entries) -join ';'), $kind)
 
         # SetValue alone doesn't notify running processes (Explorer included) of the
         # change, so broadcast WM_SETTINGCHANGE the way the Windows environment
@@ -94,7 +111,12 @@ try {
     if ($key) { $key.Close() }
 }
 
-$env:Path = "$env:Path;$InstallDir"
+# Prepend to the current session's PATH too, skipping it if it's somehow
+# already there so a rerun in the same session doesn't duplicate the entry.
+$sessionEntries = @($env:Path -split ';' | Where-Object { $_ -ne '' })
+if (-not ($sessionEntries | Where-Object { $_.TrimEnd('\') -ieq $InstallDir.TrimEnd('\') })) {
+    $env:Path = "$InstallDir;$env:Path"
+}
 
 Write-Host ""
 Write-Host "Installed dw v$version to $InstallDir" -ForegroundColor Green

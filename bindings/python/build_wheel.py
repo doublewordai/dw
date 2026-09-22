@@ -121,8 +121,11 @@ def main():
             sys.exit(1)
         print(f"Built: {name} ({whl.stat().st_size / 1024 / 1024:.1f} MB)")
 
-    # Clean up the binary from the source tree
-    target.unlink()
+    # Clean up the binary from the source tree. A previous interrupted or
+    # failed build for a different platform can leave the other name behind,
+    # which would make rmdir() fail, so remove both before removing the dir.
+    for name in ("dw", "dw.exe"):
+        (bin_dir / name).unlink(missing_ok=True)
     bin_dir.rmdir()
 
 
