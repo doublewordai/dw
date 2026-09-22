@@ -16,16 +16,8 @@ irm https://raw.githubusercontent.com/doublewordai/dw/main/install.ps1 | iex
 
 This installs `dw.exe` to `%LOCALAPPDATA%\Programs\dw` and adds it to your PATH.
 
-Or use a package manager:
-
-```powershell
-choco install dw
-```
-
-```powershell
-scoop bucket add dw https://github.com/doublewordai/dw
-scoop install dw
-```
+Chocolatey and Scoop packages are in progress but not yet published — see
+[`packaging/`](https://github.com/doublewordai/dw/tree/main/packaging) for status.
 
 `dw` runs natively on Windows, no WSL needed. The exception is `dw project`, which runs its steps through `sh` and so needs Git Bash, WSL, or MSYS2.
 

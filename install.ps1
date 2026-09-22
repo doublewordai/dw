@@ -44,10 +44,10 @@ try {
         Where-Object { $_ -match "\s$([regex]::Escape($artifact))$" } |
         ForEach-Object { ($_ -split '\s+')[0] }) | Select-Object -First 1
 
-    if ($expected) {
-        $actual = (Get-FileHash $tmpExe -Algorithm SHA256).Hash
-        if ($actual -ne $expected.ToUpper()) { Fail 'Checksum verification failed.' }
-    }
+    if (-not $expected) { Fail "Could not find a checksum for $artifact in checksums.txt." }
+
+    $actual = (Get-FileHash $tmpExe -Algorithm SHA256).Hash
+    if ($actual -ne $expected.ToUpper()) { Fail 'Checksum verification failed.' }
 
     New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
     Move-Item $tmpExe (Join-Path $InstallDir 'dw.exe') -Force
@@ -76,6 +76,18 @@ try {
 
     if (-not $present) {
         $key.SetValue('Path', (($entries + $InstallDir) -join ';'), $kind)
+
+        # SetValue alone doesn't notify running processes (Explorer included) of the
+        # change, so broadcast WM_SETTINGCHANGE the way the Windows environment
+        # variable dialog does. New processes then pick up the updated PATH without
+        # requiring a sign-out.
+        $type = Add-Type -MemberDefinition @'
+            [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Auto)]
+            public static extern IntPtr SendMessageTimeout(IntPtr hWnd, uint Msg, UIntPtr wParam, string lParam, uint fuFlags, uint uTimeout, out UIntPtr lpdwResult);
+'@ -Name 'NativeMethods' -Namespace 'Dw.Win32' -PassThru
+        $result = [UIntPtr]::Zero
+        $type::SendMessageTimeout([IntPtr]0xffff, 0x1A, [UIntPtr]::Zero, 'Environment', 2, 5000, [ref]$result) | Out-Null
+
         Write-Host "Added $InstallDir to your PATH. Restart your terminal to pick it up."
     }
 } finally {
