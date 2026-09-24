@@ -2,13 +2,18 @@
 
 Manifests for distributing `dw` through Windows package managers.
 
-> **These carry placeholder versions and hashes.** None of them can be finished
-> until a release exists that includes the `dw-windows-amd64.exe` asset. See
-> "Filling in a release" below.
+> **None of these can be finished until a release exists that includes the
+> `dw-windows-amd64.exe` asset.** See "Filling in a release" below. The
+> Chocolatey and WinGet manifests carry placeholder versions and hashes in the
+> meantime — safe to leave, since publishing either one is a deliberate manual
+> step (`choco push`, a PR to `microsoft/winget-pkgs`). `bucket/dw.json` is
+> different: the moment it exists on `main`, `scoop bucket add` picks it up, so
+> it is intentionally *not* checked in yet — create it fresh once real values
+> exist, using the template under "Scoop" below.
 
 | | Location | Publishing |
 |---|---|---|
-| Scoop | [`bucket/dw.json`](../bucket/dw.json) | Self-service, merging to `main` publishes it |
+| Scoop | `bucket/dw.json` (create from the template below) | Self-service — merging to `main` publishes it immediately |
 | Chocolatey | [`chocolatey/`](./chocolatey) | `choco push` + first-package moderation review |
 | WinGet | [`winget/`](./winget) | Manual PR to `microsoft/winget-pkgs` for the first version |
 
@@ -23,18 +28,52 @@ curl -fsSL "https://github.com/doublewordai/dw/releases/download/v${VERSION}/che
   | grep 'dw-windows-amd64\.exe$'
 ```
 
-Then update, in each file, the version string and the hash placeholder
-(`0000…0000`, or `REPLACE_WITH_SHA256_FROM_RELEASE_CHECKSUMS` for Chocolatey).
-The WinGet installer manifest also needs a real `ReleaseDate`.
+For Chocolatey and WinGet, update the version string and the hash placeholder
+(`0000…0000`, or `REPLACE_WITH_SHA256_FROM_RELEASE_CHECKSUMS`) in the existing
+files. The WinGet installer manifest also needs a real `ReleaseDate`. For
+Scoop, create `bucket/dw.json` from the template below — do not add it before
+real values are available.
 
 ## Scoop
 
 Because `bucket/` sits in this repository, it *is* a Scoop bucket, no second
-repo required:
+repo required, once `bucket/dw.json` exists:
 
 ```powershell
 scoop bucket add dw https://github.com/doublewordai/dw
 scoop install dw
+```
+
+Create `bucket/dw.json` with the real version and hash filled in:
+
+```json
+{
+    "version": "0.1.26",
+    "description": "Doubleword Batch Inference CLI. Upload JSONL files, run batches, stream results, and send real-time inference requests.",
+    "homepage": "https://github.com/doublewordai/dw",
+    "license": "MIT",
+    "architecture": {
+        "64bit": {
+            "url": "https://github.com/doublewordai/dw/releases/download/v0.1.26/dw-windows-amd64.exe#/dw.exe",
+            "hash": "<sha256 from checksums.txt>"
+        }
+    },
+    "bin": "dw.exe",
+    "checkver": {
+        "github": "https://github.com/doublewordai/dw"
+    },
+    "autoupdate": {
+        "architecture": {
+            "64bit": {
+                "url": "https://github.com/doublewordai/dw/releases/download/v$version/dw-windows-amd64.exe#/dw.exe"
+            }
+        },
+        "hash": {
+            "url": "https://github.com/doublewordai/dw/releases/download/v$version/checksums.txt",
+            "regex": "$sha256\\s+dw-windows-amd64\\.exe"
+        }
+    }
+}
 ```
 
 Two things to keep if you edit the manifest:
