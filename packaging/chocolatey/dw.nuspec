@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2015/06/nuspec.xsd">
+  <metadata>
+    <id>dw</id>
+    <version>0.1.25</version>
+    <packageSourceUrl>https://github.com/doublewordai/dw/tree/main/packaging/chocolatey</packageSourceUrl>
+    <owners>doublewordai</owners>
+
+    <title>Doubleword CLI (dw)</title>
+    <authors>Doubleword</authors>
+    <projectUrl>https://github.com/doublewordai/dw</projectUrl>
+    <projectSourceUrl>https://github.com/doublewordai/dw</projectSourceUrl>
+    <docsUrl>https://doublewordai.github.io/dw/</docsUrl>
+    <bugTrackerUrl>https://github.com/doublewordai/dw/issues</bugTrackerUrl>
+    <licenseUrl>https://github.com/doublewordai/dw/blob/main/LICENSE</licenseUrl>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <tags>dw doubleword llm inference batch cli ai</tags>
+
+    <summary>Command-line tool for the Doubleword batch inference platform.</summary>
+    <description><![CDATA[
+`dw` is the command-line tool for the [Doubleword](https://doubleword.ai) batch inference platform.
+Upload JSONL files, run batches, stream results, and send real-time inference requests, all from
+the terminal.
+
+It replaces curl commands and custom scripts with a single tool for managing files, running
+batches, and sending inference requests. Built for developers who interact with the API directly,
+scripts that automate batch workflows, and AI agents building data pipelines.
+
+### Notes
+
+* Runs natively in PowerShell, CMD, or a bash shell. WSL is not required.
+* `dw project` executes its steps through `sh`, so that subcommand needs Git Bash, WSL, or MSYS2.
+]]></description>
+    <releaseNotes>https://github.com/doublewordai/dw/releases/tag/v0.1.25</releaseNotes>
+  </metadata>
+
+  <files>
+    <file src="tools\**" target="tools" />
+  </files>
+</package>

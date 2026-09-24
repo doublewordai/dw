@@ -42,6 +42,12 @@ jobs:
           - target: aarch64-apple-darwin
             os: macos-latest
             artifact: dw-darwin-arm64
+          # `ext` is the built binary's extension. Only Windows has one.
+          # Artifact names must keep the `dw-` prefix; later steps glob on it.
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            artifact: dw-windows-amd64.exe
+            ext: .exe
 
     steps:
       - uses: actions/checkout@v4
@@ -65,7 +71,9 @@ jobs:
         run: cargo build --release --target ${{ matrix.target }}
 
       - name: Rename binary
-        run: cp target/${{ matrix.target }}/release/dw ${{ matrix.artifact }}
+        # Windows runners default to pwsh, so ask for bash explicitly.
+        shell: bash
+        run: cp target/${{ matrix.target }}/release/dw${{ matrix.ext }} ${{ matrix.artifact }}
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -120,6 +128,10 @@ jobs:
             platform: darwin-amd64
           - artifact: dw-darwin-arm64
             platform: darwin-arm64
+          # Built on Ubuntu like the others. build_wheel.py only copies the
+          # binary and sets a platform tag, so there is nothing to compile.
+          - artifact: dw-windows-amd64.exe
+            platform: windows-amd64
     steps:
       - uses: actions/checkout@v4
 

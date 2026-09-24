@@ -16,6 +16,18 @@ Replaces curl commands and custom scripts with a single tool for managing files,
 curl -fsSL https://raw.githubusercontent.com/doublewordai/dw/main/install.sh | sh
 ```
 
+### Install script (Windows)
+
+```powershell
+irm https://raw.githubusercontent.com/doublewordai/dw/main/install.ps1 | iex
+```
+
+Chocolatey, Scoop, and WinGet packages are in progress but not yet published — see
+[`packaging/`](./packaging) for status.
+
+`dw` runs natively on Windows, no WSL needed. The exception is `dw project`,
+which runs its steps through `sh` and so needs Git Bash, WSL, or MSYS2.
+
 ### pip
 
 ```bash
@@ -48,6 +60,8 @@ cd dw
 cargo build --release
 cp target/release/dw ~/.local/bin/   # or anywhere in your PATH
 ```
+
+On Windows the binary is `target\release\dw.exe`.
 
 ## Setup
 
