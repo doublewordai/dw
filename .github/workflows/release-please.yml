@@ -16,7 +16,7 @@ jobs:
       release_created: ${{ steps.release.outputs.release_created }}
       tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
-      - uses: googleapis/release-please-action@v4
+      - uses: googleapis/release-please-action@5c625bfb5d1ff62eadeeb3772007f7f66fdcf071 # v4.4.1
         id: release
         with:
           config-file: release-please-config.json
@@ -44,9 +44,9 @@ jobs:
             artifact: dw-darwin-arm64
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
         with:
           targets: ${{ matrix.target }}
 
@@ -57,7 +57,7 @@ jobs:
           sudo apt-get install -y gcc-aarch64-linux-gnu
           echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           key: release-${{ matrix.target }}
 
@@ -68,7 +68,7 @@ jobs:
         run: cp target/${{ matrix.target }}/release/dw ${{ matrix.artifact }}
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: ${{ matrix.artifact }}
           path: ${{ matrix.artifact }}
@@ -82,7 +82,7 @@ jobs:
       contents: write
     steps:
       - name: Download all artifacts
-        uses: actions/download-artifact@v4.3.0
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           path: artifacts/
 
@@ -121,26 +121,26 @@ jobs:
           - artifact: dw-darwin-arm64
             platform: darwin-arm64
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: "3.12"
 
       - name: Download binary artifact
-        uses: actions/download-artifact@v4.3.0
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: ${{ matrix.artifact }}
           path: bindings/python/
 
       - name: Build platform wheel
         run: |
-          pip install setuptools wheel
+          pip install setuptools==84.2.1 wheel==0.48.0
           cd bindings/python
           python build_wheel.py ${{ matrix.artifact }} ${{ matrix.platform }}
 
       - name: Upload wheel artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: wheel-${{ matrix.platform }}
           path: bindings/python/dist/*.whl
@@ -152,7 +152,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Download all wheel artifacts
-        uses: actions/download-artifact@v4.3.0
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           pattern: wheel-*
           path: wheels/
@@ -163,6 +163,6 @@ jobs:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
         run: |
-          pip install twine
+          pip install twine==7.0.0
           ls -la wheels/
           twine upload --verbose wheels/*.whl
