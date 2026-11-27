@@ -53,6 +53,9 @@ jobs:
   type-check:
     name: Type Validation
     runs-on: ubuntu-latest
+    # DW_PLATFORM_KEY is a read-only catalogue key from Tenancy, synced to this
+    # environment (doublewordai/access, /syncs/dw/pr-checks).
+    environment: pr-checks
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
